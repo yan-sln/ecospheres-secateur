@@ -1,15 +1,15 @@
-import json
-
 from qgis.PyQt.QtCore import Qt, QTimer, QStringListModel
 from qgis.PyQt.QtWidgets import (
     QCompleter,
-    QDialog,
+    QDockWidget,
     QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QProgressBar,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from ..core.commune_api import fetch_commune_geometry, search_communes
@@ -17,16 +17,15 @@ from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.intersector import add_results_to_project, find_wfs_layers, intersect_commune
 
 
-class SecateurDialog(QDialog):
+class SecateurPanel(QDockWidget):
     def __init__(self, iface, parent=None):
-        super().__init__(parent or iface.mainWindow())
+        super().__init__("Ecosphères Secateur", parent or iface.mainWindow())
         self.iface = iface
-        self.setWindowTitle("Ecosphères Secateur")
-        self.setMinimumWidth(400)
+        self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
 
-        self._communes = []  # current autocomplete results
+        self._communes = []
         self._selected_code = None
-        self._result_layers = []  # last intersection results
+        self._result_layers = []
         self._commune_name = None
         self._commune_geom = None
         self._debounce_timer = QTimer(self)
@@ -37,7 +36,8 @@ class SecateurDialog(QDialog):
         self._build_ui()
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
+        container = QWidget()
+        layout = QVBoxLayout(container)
 
         # Commune search
         layout.addWidget(QLabel("Commune :"))
@@ -76,9 +76,18 @@ class SecateurDialog(QDialog):
 
         layout.addLayout(btn_row)
 
+        # Progress
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        layout.addWidget(self.progress_bar)
+
         # Status
         self.status_label = QLabel("")
+        self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
+
+        layout.addStretch()
+        self.setWidget(container)
 
     def _on_text_changed(self, text):
         self._selected_code = None
@@ -98,7 +107,6 @@ class SecateurDialog(QDialog):
         self._completer.complete()
 
     def _on_commune_selected(self, text):
-        # Parse "Dijon (21231)" back to code
         for c in self._communes:
             display = f"{c['nom']} ({c['code']})"
             if display == text:
@@ -130,13 +138,12 @@ class SecateurDialog(QDialog):
             self.run_button.setEnabled(True)
             return
 
-        self.status_label.setText(f"Intersection avec {len(layers)} couche(s) WFS…")
-        self._force_repaint()
+        self._start_progress(len(layers))
+        self._update_progress(0, len(layers), f"Intersection avec {len(layers)} couche(s) WFS…")
 
         def progress(current, total, name):
             if current < total:
-                self.status_label.setText(f"Intersection {current + 1}/{total} : {name}")
-                self._force_repaint()
+                self._update_progress(current, total, f"Intersection {current + 1}/{total} : {name}")
 
         results = intersect_commune(geom, layers, progress_callback=progress)
 
@@ -146,14 +153,14 @@ class SecateurDialog(QDialog):
             self.export_csv_button.setEnabled(True)
             self.export_pdf_button.setEnabled(True)
             total_feats = sum(r.featureCount() for r in results)
-            self.status_label.setText(
+            self._finish_progress(
                 f"Terminé — {total_feats} entité(s) trouvée(s) dans {len(results)} couche(s)."
             )
         else:
             self._result_layers = []
             self.export_csv_button.setEnabled(False)
             self.export_pdf_button.setEnabled(False)
-            self.status_label.setText("Aucune intersection trouvée.")
+            self._finish_progress("Aucune intersection trouvée.")
 
         self.run_button.setEnabled(True)
 
@@ -166,14 +173,16 @@ class SecateurDialog(QDialog):
         if not folder:
             return
         try:
+            total = len(self._result_layers)
+            self._start_progress(total)
+
             def progress(current, total, name):
-                self.status_label.setText(f"Export CSV {current + 1}/{total} : {name}")
-                self._force_repaint()
+                self._update_progress(current, total, f"Export CSV {current + 1}/{total} : {name}")
 
             written = export_results_to_csv(self._result_layers, folder, progress)
-            self.status_label.setText(f"Export CSV : {len(written)} fichier(s) dans {folder}")
+            self._finish_progress(f"Export CSV : {len(written)} fichier(s) dans {folder}")
         except Exception as e:
-            self.status_label.setText(f"Erreur export CSV : {e}")
+            self._finish_progress(f"Erreur export CSV : {e}")
 
     def _on_export_pdf(self):
         if not self._result_layers:
@@ -185,17 +194,33 @@ class SecateurDialog(QDialog):
         if not path:
             return
         try:
+            total = 1 + len(self._result_layers)
+            self._start_progress(total)
+
             def progress(current, total, name):
-                self.status_label.setText(f"Export PDF {current + 1}/{total} : {name}")
-                self._force_repaint()
+                self._update_progress(current, total, f"Export PDF {current + 1}/{total} : {name}")
 
             export_results_to_pdf(
                 self._result_layers, self._commune_name, self._commune_geom, path,
                 progress_callback=progress,
             )
-            self.status_label.setText(f"Export PDF : {path}")
+            self._finish_progress(f"Export PDF : {path}")
         except Exception as e:
-            self.status_label.setText(f"Erreur export PDF : {e}")
+            self._finish_progress(f"Erreur export PDF : {e}")
+
+    def _start_progress(self, total):
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setVisible(True)
+
+    def _update_progress(self, current, total, text):
+        self.progress_bar.setValue(current)
+        self.status_label.setText(text)
+        self._force_repaint()
+
+    def _finish_progress(self, text):
+        self.progress_bar.setVisible(False)
+        self.status_label.setText(text)
 
     def _force_repaint(self):
         from qgis.PyQt.QtWidgets import QApplication
