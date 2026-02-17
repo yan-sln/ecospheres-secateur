@@ -13,7 +13,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core.commune_api import fetch_commune_geometry, search_communes
-from ..core.export import export_results_to_csv
+from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.intersector import add_results_to_project, find_wfs_layers, intersect_commune
 
 
@@ -27,6 +27,8 @@ class SecateurDialog(QDialog):
         self._communes = []  # current autocomplete results
         self._selected_code = None
         self._result_layers = []  # last intersection results
+        self._commune_name = None
+        self._commune_geom = None
         self._debounce_timer = QTimer(self)
         self._debounce_timer.setSingleShot(True)
         self._debounce_timer.setInterval(300)
@@ -62,10 +64,15 @@ class SecateurDialog(QDialog):
         self.run_button.clicked.connect(self._on_run)
         btn_row.addWidget(self.run_button)
 
-        self.export_button = QPushButton("Exporter CSV")
-        self.export_button.setEnabled(False)
-        self.export_button.clicked.connect(self._on_export_csv)
-        btn_row.addWidget(self.export_button)
+        self.export_csv_button = QPushButton("Exporter CSV")
+        self.export_csv_button.setEnabled(False)
+        self.export_csv_button.clicked.connect(self._on_export_csv)
+        btn_row.addWidget(self.export_csv_button)
+
+        self.export_pdf_button = QPushButton("Exporter PDF")
+        self.export_pdf_button.setEnabled(False)
+        self.export_pdf_button.clicked.connect(self._on_export_pdf)
+        btn_row.addWidget(self.export_pdf_button)
 
         layout.addLayout(btn_row)
 
@@ -96,6 +103,7 @@ class SecateurDialog(QDialog):
             display = f"{c['nom']} ({c['code']})"
             if display == text:
                 self._selected_code = c["code"]
+                self._commune_name = c["nom"]
                 self.run_button.setEnabled(True)
                 self.status_label.setText(f"Commune sélectionnée : {c['nom']} ({c['code']})")
                 return
@@ -113,6 +121,8 @@ class SecateurDialog(QDialog):
             self.status_label.setText("Erreur : impossible de récupérer la géométrie.")
             self.run_button.setEnabled(True)
             return
+
+        self._commune_geom = geom
 
         layers = find_wfs_layers()
         if not layers:
@@ -133,14 +143,16 @@ class SecateurDialog(QDialog):
         if results:
             add_results_to_project(results)
             self._result_layers = results
-            self.export_button.setEnabled(True)
+            self.export_csv_button.setEnabled(True)
+            self.export_pdf_button.setEnabled(True)
             total_feats = sum(r.featureCount() for r in results)
             self.status_label.setText(
                 f"Terminé — {total_feats} entité(s) trouvée(s) dans {len(results)} couche(s)."
             )
         else:
             self._result_layers = []
-            self.export_button.setEnabled(False)
+            self.export_csv_button.setEnabled(False)
+            self.export_pdf_button.setEnabled(False)
             self.status_label.setText("Aucune intersection trouvée.")
 
         self.run_button.setEnabled(True)
@@ -154,10 +166,36 @@ class SecateurDialog(QDialog):
         if not folder:
             return
         try:
-            written = export_results_to_csv(self._result_layers, folder)
+            def progress(current, total, name):
+                self.status_label.setText(f"Export CSV {current + 1}/{total} : {name}")
+                self._force_repaint()
+
+            written = export_results_to_csv(self._result_layers, folder, progress)
             self.status_label.setText(f"Export CSV : {len(written)} fichier(s) dans {folder}")
         except Exception as e:
             self.status_label.setText(f"Erreur export CSV : {e}")
+
+    def _on_export_pdf(self):
+        if not self._result_layers:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exporter le rapport PDF", "", "PDF (*.pdf)",
+            options=QFileDialog.Options(),
+        )
+        if not path:
+            return
+        try:
+            def progress(current, total, name):
+                self.status_label.setText(f"Export PDF {current + 1}/{total} : {name}")
+                self._force_repaint()
+
+            export_results_to_pdf(
+                self._result_layers, self._commune_name, self._commune_geom, path,
+                progress_callback=progress,
+            )
+            self.status_label.setText(f"Export PDF : {path}")
+        except Exception as e:
+            self.status_label.setText(f"Erreur export PDF : {e}")
 
     def _force_repaint(self):
         from qgis.PyQt.QtWidgets import QApplication

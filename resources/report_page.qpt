@@ -1,0 +1,25 @@
+<Layout units="mm" worldFileMap="{00000000-0000-0000-0000-000000000000}">
+ <Snapper tolerance="5"/>
+ <Grid resolution="10" resUnits="mm" offsetX="0" offsetY="0" offsetUnits="mm"/>
+ <PageCollection>
+  <symbol alpha="1" type="fill" name="">
+   <layer class="SimpleFill" pass="0">
+    <prop k="color" v="255,255,255,255"/>
+    <prop k="style" v="solid"/>
+    <prop k="outline_style" v="no"/>
+   </layer>
+  </symbol>
+  <LayoutItem type="65638" uuid="{page-0}" size="297,210,mm" position="0,0,mm">
+   <FrameColor red="0" green="0" blue="0" alpha="255"/>
+   <BackgroundColor red="255" green="255" blue="255" alpha="255"/>
+  </LayoutItem>
+ </PageCollection>
+ <LayoutItem type="65641" uuid="{label-title}" id="title" position="10,8,mm" size="277,14,mm" frame="false" background="false" referencePoint="0" halign="4" valign="128" labelText="Titre">
+  <LabelFont style="" description="Sans Serif,16,-1,5,75,0,0,0,0,0"/>
+  <FontColor red="0" green="0" blue="0" alpha="255"/>
+ </LayoutItem>
+ <LayoutItem type="65639" uuid="{map-main}" id="map" position="10,26,mm" size="277,174,mm" frame="true" background="true" referencePoint="0" keepLayerSet="false" drawCanvasItems="true">
+  <FrameColor red="0" green="0" blue="0" alpha="255" width="0.3"/>
+  <BackgroundColor red="255" green="255" blue="255" alpha="255"/>
+ </LayoutItem>
+</Layout>
