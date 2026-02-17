@@ -1,8 +1,8 @@
 import os
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QAction
+from qgis.PyQt.QtCore import Qt  # noqa: UP035
+from qgis.PyQt.QtGui import QIcon  # noqa: UP035
+from qgis.PyQt.QtWidgets import QAction  # noqa: UP035
 
 from .ui.panel import SecateurPanel
 

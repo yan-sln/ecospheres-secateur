@@ -15,6 +15,7 @@ dev = [
 [tool.ruff]
 target-version = "py312"
 line-length = 120
+extend-exclude = ["stubs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
@@ -22,6 +23,7 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
+stubPath = "stubs"
 # stub-only packages (qgis, PyQt5) have no source — this is expected
 reportMissingModuleSource = false
 ignore = ["**/__pycache__"]

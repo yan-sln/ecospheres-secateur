@@ -1,5 +1,5 @@
-from PyQt5.QtCore import QStringListModel, Qt, QTimer
-from PyQt5.QtWidgets import (
+from qgis.PyQt.QtCore import QStringListModel, Qt, QTimer  # noqa: UP035
+from qgis.PyQt.QtWidgets import (  # noqa: UP035
     QCompleter,
     QDockWidget,
     QFileDialog,
@@ -227,6 +227,6 @@ class SecateurPanel(QDockWidget):
         self.status_label.setText(text)
 
     def _force_repaint(self):
-        from PyQt5.QtWidgets import QApplication
+        from qgis.PyQt.QtWidgets import QApplication  # noqa: UP035
 
         QApplication.processEvents()

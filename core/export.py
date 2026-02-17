@@ -2,8 +2,6 @@ import csv
 import os
 import re
 
-from PyQt5.QtCore import QDate, QDateTime, QTime
-from PyQt5.QtXml import QDomDocument
 from qgis.core import (
     QgsGeometry,
     QgsLayout,
@@ -17,6 +15,8 @@ from qgis.core import (
     QgsReportSectionLayout,
     QgsVectorLayer,
 )
+from qgis.PyQt.QtCore import QDate, QDateTime, QTime  # noqa: UP035
+from qgis.PyQt.QtXml import QDomDocument  # noqa: UP035
 
 
 def _format_value(val):
@@ -142,6 +142,8 @@ def export_results_to_pdf(
     project = QgsProject.instance()
     template_doc = _load_template()
     basemap = _create_basemap()
+    # Register basemap so QgsLayoutItemMap can render it
+    project.addMapLayer(basemap, False)
 
     # Buffered extent (5% margin)
     bbox = commune_geom.boundingBox()
@@ -171,11 +173,12 @@ def export_results_to_pdf(
         report.appendChild(section)
 
     # Export
-    if progress_callback:
-        progress_callback(total_pages, total_pages, "Export PDF…")
     settings = QgsLayoutExporter.PdfExportSettings()
     # exportToPdf returns tuple[ExportResult, str] at runtime but qgis-stubs types it as ExportResult
     result, error = QgsLayoutExporter.exportToPdf(report, output_path, settings)  # pyright: ignore[reportGeneralTypeIssues]
+
+    # Clean up temporary basemap
+    project.removeMapLayer(basemap.id())
 
     if result != QgsLayoutExporter.Success:
         raise RuntimeError(f"PDF export failed: {error}")
