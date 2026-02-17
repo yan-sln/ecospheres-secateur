@@ -1,8 +1,8 @@
 import os
 
-from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QAction
 
 from .ui.panel import SecateurPanel
 
@@ -35,7 +35,8 @@ class Plugin:
         if self.panel is None:
             self.panel = SecateurPanel(self.iface)
             self.iface.addDockWidget(Qt.RightDockWidgetArea, self.panel)
-            self.panel.visibilityChanged.connect(self.action.setChecked)
+            if self.action:
+                self.panel.visibilityChanged.connect(self.action.setChecked)
         if checked:
             self.panel.show()
         else:

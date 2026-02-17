@@ -1,5 +1,5 @@
-from qgis.PyQt.QtCore import Qt, QTimer, QStringListModel
-from qgis.PyQt.QtWidgets import (
+from PyQt5.QtCore import QStringListModel, Qt, QTimer
+from PyQt5.QtWidgets import (
     QCompleter,
     QDockWidget,
     QFileDialog,
@@ -155,9 +155,7 @@ class SecateurPanel(QDockWidget):
             self.export_csv_button.setEnabled(True)
             self.export_pdf_button.setEnabled(True)
             total_feats = sum(r.featureCount() for r in results)
-            self._finish_progress(
-                f"Terminé — {total_feats} entité(s) trouvée(s) dans {len(results)} couche(s)."
-            )
+            self._finish_progress(f"Terminé — {total_feats} entité(s) trouvée(s) dans {len(results)} couche(s).")
         else:
             self._result_layers = []
             self.export_csv_button.setEnabled(False)
@@ -169,9 +167,7 @@ class SecateurPanel(QDockWidget):
     def _on_export_csv(self):
         if not self._result_layers:
             return
-        folder = QFileDialog.getExistingDirectory(
-            self, "Dossier d'export CSV"
-        )
+        folder = QFileDialog.getExistingDirectory(self, "Dossier d'export CSV")
         if not folder:
             return
         try:
@@ -190,7 +186,10 @@ class SecateurPanel(QDockWidget):
         if not self._result_layers:
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Exporter le rapport PDF", "", "PDF (*.pdf)",
+            self,
+            "Exporter le rapport PDF",
+            "",
+            "PDF (*.pdf)",
             options=QFileDialog.Options(),
         )
         if not path:
@@ -203,7 +202,10 @@ class SecateurPanel(QDockWidget):
                 self._update_progress(current, total, f"Export PDF {current + 1}/{total} : {name}")
 
             export_results_to_pdf(
-                self._result_layers, self._commune_name, self._commune_geom, path,
+                self._result_layers,
+                self._commune_name or "",
+                self._commune_geom,
+                path,
                 progress_callback=progress,
             )
             self._finish_progress(f"Export PDF : {path}")
@@ -225,5 +227,6 @@ class SecateurPanel(QDockWidget):
         self.status_label.setText(text)
 
     def _force_repaint(self):
-        from qgis.PyQt.QtWidgets import QApplication
+        from PyQt5.QtWidgets import QApplication
+
         QApplication.processEvents()

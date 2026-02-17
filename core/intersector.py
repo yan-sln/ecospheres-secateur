@@ -1,11 +1,11 @@
 from qgis.core import (
+    QgsFeature,
     QgsFeatureRequest,
     QgsGeometry,
-    QgsLayerTreeLayer,
     QgsLayerTreeGroup,
+    QgsLayerTreeLayer,
     QgsProject,
     QgsVectorLayer,
-    QgsFeature,
     QgsWkbTypes,
 )
 

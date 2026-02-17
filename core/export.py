@@ -2,8 +2,8 @@ import csv
 import os
 import re
 
-from qgis.PyQt.QtCore import QDate, QDateTime, QTime
-from qgis.PyQt.QtXml import QDomDocument
+from PyQt5.QtCore import QDate, QDateTime, QTime
+from PyQt5.QtXml import QDomDocument
 from qgis.core import (
     QgsGeometry,
     QgsLayout,
@@ -33,7 +33,7 @@ def _format_value(val):
 
 def _safe_filename(name: str) -> str:
     """Turn a layer name into a safe filename (no path separators, etc.)."""
-    return re.sub(r'[^\w\s\-()]', '_', name).strip()
+    return re.sub(r"[^\w\s\-()]", "_", name).strip()
 
 
 def export_results_to_csv(
@@ -74,11 +74,9 @@ def export_results_to_csv(
 
 def _load_template() -> QDomDocument:
     """Load the report_page.qpt template as a QDomDocument."""
-    template_path = os.path.join(
-        os.path.dirname(__file__), os.pardir, "resources", "report_page.qpt"
-    )
+    template_path = os.path.join(os.path.dirname(__file__), os.pardir, "resources", "report_page.qpt")
     doc = QDomDocument()
-    with open(template_path, "r", encoding="utf-8") as f:
+    with open(template_path, encoding="utf-8") as f:
         doc.setContent(f.read())
     return doc
 
@@ -155,9 +153,7 @@ def export_results_to_pdf(
     # Page 1: overview with all result layers
     if progress_callback:
         progress_callback(0, total_pages, commune_name)
-    overview_layout = _make_page_layout(
-        project, template_doc, commune_name, bbox, list(result_layers) + [basemap]
-    )
+    overview_layout = _make_page_layout(project, template_doc, commune_name, bbox, list(result_layers) + [basemap])
     overview_section = QgsReportSectionLayout(report)
     overview_section.setBody(overview_layout)
     overview_section.setBodyEnabled(True)
@@ -168,9 +164,7 @@ def export_results_to_pdf(
         layer_name = layer.name().removesuffix(" — résultat")
         if progress_callback:
             progress_callback(i + 1, total_pages, layer_name)
-        page_layout = _make_page_layout(
-            project, template_doc, layer_name, bbox, [layer, basemap]
-        )
+        page_layout = _make_page_layout(project, template_doc, layer_name, bbox, [layer, basemap])
         section = QgsReportSectionLayout(report)
         section.setBody(page_layout)
         section.setBodyEnabled(True)
@@ -180,7 +174,8 @@ def export_results_to_pdf(
     if progress_callback:
         progress_callback(total_pages, total_pages, "Export PDF…")
     settings = QgsLayoutExporter.PdfExportSettings()
-    result, error = QgsLayoutExporter.exportToPdf(report, output_path, settings)
+    # exportToPdf returns tuple[ExportResult, str] at runtime but qgis-stubs types it as ExportResult
+    result, error = QgsLayoutExporter.exportToPdf(report, output_path, settings)  # pyright: ignore[reportGeneralTypeIssues]
 
     if result != QgsLayoutExporter.Success:
         raise RuntimeError(f"PDF export failed: {error}")

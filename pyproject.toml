@@ -1,0 +1,27 @@
+[project]
+name = "ecospheres-secateur"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[dependency-groups]
+dev = [
+    "ruff",
+ "pyright",
+ "pre-commit",
+ "qgis-stubs",
+ "pyqt5-stubs>=5.15.6.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+# stub-only packages (qgis, PyQt5) have no source — this is expected
+reportMissingModuleSource = false
+ignore = ["**/__pycache__"]

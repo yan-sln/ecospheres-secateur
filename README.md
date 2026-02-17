@@ -46,6 +46,24 @@ ln -s "$(pwd)/ecospheres-secateur" ~/Library/Application\ Support/QGIS/QGIS3/pro
 # Recharger après modif : installer le plugin "Plugin Reloader" et cibler ecospheres-secateur
 ```
 
+### Qualité du code
+
+Le projet utilise [ruff](https://docs.astral.sh/ruff/) (lint + format) et [pyright](https://github.com/microsoft/pyright) (type checking), exécutés automatiquement via [pre-commit](https://pre-commit.com/).
+
+```bash
+# Installer les dépendances de dev et activer les hooks pre-commit
+uv sync
+uv run pre-commit install
+
+# Lancer manuellement sur tous les fichiers
+uv run pre-commit run --all-files
+
+# Ou individuellement
+uv run ruff check --fix .
+uv run ruff format .
+uv run pyright
+```
+
 ### Structure
 
 ```
