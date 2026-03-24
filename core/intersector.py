@@ -56,7 +56,9 @@ def intersect_commune(
         # Reproject commune geometry to layer CRS
         layer_crs = layer.crs()
         if layer_crs != commune_crs:
-            transform = QgsCoordinateTransform(commune_crs, layer_crs, QgsProject.instance())
+            transform = QgsCoordinateTransform(
+                commune_crs, layer_crs, QgsProject.instance()
+            )
             local_geom = QgsGeometry(commune_geom)
             local_geom.transform(transform)
         else:

@@ -46,6 +46,8 @@ ln -s "$(pwd)/ecospheres-secateur" ~/Library/Application\ Support/QGIS/QGIS3/pro
 # Recharger après modif : installer le plugin "Plugin Reloader" et cibler ecospheres-secateur
 ```
 
+**Nouvelle architecture** – Le module de recherche de communes a été migré vers le framework générique **geoselector**. Un adaptateur (`core/commune_selector.py`) expose les mêmes fonctions `search_communes` et `fetch_commune_geometry` tout en utilisant le sélecteur de `geoselector`. Cette évolution simplifie l’ajout d’autres entités géographiques et centralise la logique d’accès aux services WFS. Vous pouvez trouver le projet geoselector et ses instructions d'installation ici : https://github.com/yan-sln/geoselector.
+
 ### Qualité du code
 
 Le projet utilise [ruff](https://docs.astral.sh/ruff/) (lint + format) et [pyright](https://github.com/microsoft/pyright) (type checking), exécutés automatiquement via [pre-commit](https://pre-commit.com/). Prérequis : [uv](https://docs.astral.sh/uv/#installation).

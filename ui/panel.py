@@ -12,9 +12,13 @@ from qgis.PyQt.QtWidgets import (  # noqa: UP035
     QWidget,
 )
 
-from ..core.commune_api import fetch_commune_geometry, search_communes
+from ..core.commune_selector import fetch_commune_geometry, search_communes
 from ..core.export import export_results_to_csv, export_results_to_pdf
-from ..core.intersector import add_results_to_project, find_wfs_layers, intersect_commune
+from ..core.intersector import (
+    add_results_to_project,
+    find_wfs_layers,
+    intersect_commune,
+)
 
 
 class SecateurPanel(QDockWidget):
@@ -115,7 +119,9 @@ class SecateurPanel(QDockWidget):
                 self._selected_code = c["code"]
                 self._commune_name = c["nom"]
                 self.run_button.setEnabled(True)
-                self.status_label.setText(f"Commune sélectionnée : {c['nom']} ({c['code']})")
+                self.status_label.setText(
+                    f"Commune sélectionnée : {c['nom']} ({c['code']})"
+                )
                 return
 
     def _on_run(self):
@@ -141,11 +147,15 @@ class SecateurPanel(QDockWidget):
             return
 
         self._start_progress(len(layers))
-        self._update_progress(0, len(layers), f"Intersection avec {len(layers)} couche(s) WFS…")
+        self._update_progress(
+            0, len(layers), f"Intersection avec {len(layers)} couche(s) WFS…"
+        )
 
         def progress(current, total, name):
             if current < total:
-                self._update_progress(current, total, f"Intersection {current + 1}/{total} : {name}")
+                self._update_progress(
+                    current, total, f"Intersection {current + 1}/{total} : {name}"
+                )
 
         results = intersect_commune(geom, layers, progress_callback=progress)
 
@@ -155,7 +165,9 @@ class SecateurPanel(QDockWidget):
             self.export_csv_button.setEnabled(True)
             self.export_pdf_button.setEnabled(True)
             total_feats = sum(r.featureCount() for r in results)
-            self._finish_progress(f"Terminé — {total_feats} entité(s) trouvée(s) dans {len(results)} couche(s).")
+            self._finish_progress(
+                f"Terminé — {total_feats} entité(s) trouvée(s) dans {len(results)} couche(s)."
+            )
         else:
             self._result_layers = []
             self.export_csv_button.setEnabled(False)
@@ -175,10 +187,14 @@ class SecateurPanel(QDockWidget):
             self._start_progress(total)
 
             def progress(current, total, name):
-                self._update_progress(current, total, f"Export CSV {current + 1}/{total} : {name}")
+                self._update_progress(
+                    current, total, f"Export CSV {current + 1}/{total} : {name}"
+                )
 
             written = export_results_to_csv(self._result_layers, folder, progress)
-            self._finish_progress(f"Export CSV : {len(written)} fichier(s) dans {folder}")
+            self._finish_progress(
+                f"Export CSV : {len(written)} fichier(s) dans {folder}"
+            )
         except Exception as e:
             self._finish_progress(f"Erreur export CSV : {e}")
 
@@ -199,7 +215,9 @@ class SecateurPanel(QDockWidget):
             self._start_progress(total)
 
             def progress(current, total, name):
-                self._update_progress(current, total, f"Export PDF {current + 1}/{total} : {name}")
+                self._update_progress(
+                    current, total, f"Export PDF {current + 1}/{total} : {name}"
+                )
 
             export_results_to_pdf(
                 self._result_layers,
