@@ -70,18 +70,18 @@ uv run pyright
 
 ```
 ecospheres-secateur/
-├── __init__.py          # classFactory
-├── metadata.txt         # Métadonnées plugin
-├── plugin.py            # Toolbar + cycle de vie du panneau
+├── __init__.py               # classFactory
+├── metadata.txt              # Métadonnées plugin
+├── plugin.py                 # Toolbar + cycle de vie du panneau
 ├── ui/
-│   └── panel.py         # Panneau dock : recherche commune + boutons + barre de progression
+│   └── panel.py              # Panneau dock : recherche commune + boutons + barre de progression
 ├── core/
-│   ├── commune_api.py   # Appels geo.api.gouv.fr
-│   ├── intersector.py   # Détection WFS, intersection, couches résultat
-│   └── export.py        # Export CSV et PDF
+│   ├── commune_selector.py   # Adapter module for `geoselector` 
+│   ├── intersector.py        # Détection WFS, intersection, couches résultat
+│   └── export.py             # Export CSV et PDF
 └── resources/
     ├── icon.png
-    └── report_page.qpt  # Modèle de mise en page pour l'export PDF
+    └── report_page.qpt       # Modèle de mise en page pour l'export PDF
 ```
 
 ### Personnaliser le modèle PDF
