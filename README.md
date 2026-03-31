@@ -3,17 +3,13 @@
 Plugin QGIS d'intersection spatiale. Sélectionnez une commune, le plugin intersecte automatiquement toutes les couches WFS visibles du projet et extrait les entités concernées.
 
 ## Fonctionnalités
-
-- **Recherche de commune** avec autocomplétion (API geo.api.gouv.fr)
-- **Intersection automatique** de toutes les couches WFS visibles du projet avec le contour communal
-- **Résultats en couches mémoire** regroupées dans un groupe "Résultats secateur"
-- **Export CSV** — un fichier par couche dans un dossier au choix
-- **Export PDF** — rapport cartographique multi-pages avec fond de carte IGN Plan IGN v2
+- **Recherche** avec autocomplétion via le module `geoselector`.
+- **Intersection automatique** de toutes les couches WFS visibles du projet avec le contour de la parcelle.
+- **Résultats en couches mémoire** regroupées dans un groupe "Résultats secateur".
+- **Export CSV** — un fichier par couche dans un dossier au choix.
+- **Export PDF** — rapport cartographique multi-pages avec fond de carte IGN Plan IGN v2.
 
 ## Installation
-
-QGIS 3.28 minimum.
-
 ```bash
 # macOS
 ln -s /chemin/vers/ecospheres-secateur \
@@ -23,30 +19,32 @@ ln -s /chemin/vers/ecospheres-secateur \
 ln -s /chemin/vers/ecospheres-secateur \
   ~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/ecospheres-secateur
 ```
+Puis dans QGIS : **Extensions > Gérer/Installer > chercher "Ecosphères Sécateur" > activer**.
 
-Puis dans QGIS : **Extensions > Gérer/Installer > chercher "Ecosphères Sécateur" > activer**.
+## Configuration requise
+| Élément | Description | Valeur par défaut |
+|---------|-------------|-------------------|
+| QGIS | ≥ 3.28 (supporte Python 3.9) | – |
+| Python | ≥ 3.9 (pour `str.removesuffix`) | – |
+| Services WFS | Accessible depuis le projet QGIS | – |
+| Ressources | `resources/icon.png`, `resources/report_page.qpt` | fournis dans le dépôt |
 
-## Utilisation
+## Utilisation du plugin
+1. Activer le plugin depuis le menu **Extensions → Gérer/Installer → Ecosphères Sécateur**.
+2. Un icône apparaît dans la barre d’outils ; cliquer dessus pour ouvrir le panneau latéral.
+3. Taper le nom d’une commune (au moins 2 caractères) et choisir dans la liste proposée.
+4. Sélectionner la section puis la parcelle souhaitées.
+5. Cliquer **Interroger** : le plugin récupère la géométrie, trouve les couches WFS visibles et crée des calques mémoire contenant les entités intersectées.
+6. Les résultats apparaissent dans le groupe "Résultats secateur" du projet.
+7. **Exporter CSV** : choisir un répertoire, chaque couche résultat devient un fichier `nom_couche.csv`.
+8. **Exporter PDF** : choisir un fichier, le rapport comprend une page d’overview + une page par couche résultat avec le fond de carte IGN.
 
-1. Charger un projet QGIS avec des couches WFS (GPU, Géorisques, etc.)
-2. Cliquer sur l'icône sécateur dans la toolbar — un panneau latéral s'ouvre
-3. Taper un nom de commune, sélectionner dans la liste
-4. Cliquer **Interroger**
-5. Les résultats apparaissent dans le groupe "Résultats secateur"
-6. Cliquer **Exporter CSV** pour sauvegarder les attributs
-7. Cliquer **Exporter PDF** pour générer un rapport cartographique
-
-## Développement
-
+## Développement & tests
 ```bash
 # Cloner et symlinker
 git clone <repo> && cd qgis-plugins
 ln -s "$(pwd)/ecospheres-secateur" ~/Library/Application\ Support/QGIS/QGIS3/profiles/default/python/plugins/
-
-# Recharger après modif : installer le plugin "Plugin Reloader" et cibler ecospheres-secateur
 ```
-
-**Nouvelle architecture** – Le module de recherche de communes a été migré vers le framework générique **geoselector**. Un adaptateur (`core/commune_selector.py`) expose les mêmes fonctions `search_communes` et `fetch_commune_geometry` tout en utilisant le sélecteur de `geoselector`. Cette évolution simplifie l’ajout d’autres entités géographiques et centralise la logique d’accès aux services WFS. Vous pouvez trouver le projet geoselector et ses instructions d'installation ici : https://github.com/yan-sln/geoselector.
 
 ### Qualité du code
 
@@ -66,23 +64,12 @@ uv run ruff format .
 uv run pyright
 ```
 
-### Structure
-
-```
-ecospheres-secateur/
-├── __init__.py               # classFactory
-├── metadata.txt              # Métadonnées plugin
-├── plugin.py                 # Toolbar + cycle de vie du panneau
-├── ui/
-│   └── panel.py              # Panneau dock : recherche commune + boutons + barre de progression
-├── core/
-│   ├── commune_selector.py   # Adapter module for `geoselector` 
-│   ├── intersector.py        # Détection WFS, intersection, couches résultat
-│   └── export.py             # Export CSV et PDF
-└── resources/
-    ├── icon.png
-    └── report_page.qpt       # Modèle de mise en page pour l'export PDF
-```
+- **Structure du code** :
+  - `core/` : logique métier (recherche, intersection, export).
+  - `ui/` : interface utilisateur (`ui/panel.py`).
+  - `plugin.py` : point d’entrée du plugin.
+- **Tests manuels** : lancer le plugin, sélectionner des entités, vérifier que les calques mémoire apparaissent et que les exports s’ouvrent sans erreur.
+- **Future** : ajouter une suite de tests unitaires (pytest) et CI (GitHub Actions).
 
 ### Personnaliser le modèle PDF
 

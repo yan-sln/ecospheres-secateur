@@ -1,5 +1,6 @@
 from qgis.PyQt.QtCore import QStringListModel, Qt, QTimer  # noqa: UP035
 from qgis.PyQt.QtWidgets import (  # noqa: UP035
+    QComboBox,
     QCompleter,
     QDockWidget,
     QFileDialog,
@@ -12,12 +13,17 @@ from qgis.PyQt.QtWidgets import (  # noqa: UP035
     QWidget,
 )
 
-from ..core.commune_selector import fetch_commune_geometry, search_communes
+from ..core.entities_selector import (
+    fetch_parcel_geometry,
+    list_sections,
+    list_parcelles,
+    search_communes,
+)
 from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.intersector import (
     add_results_to_project,
     find_wfs_layers,
-    intersect_commune,
+    intersect_parcelle,
 )
 
 
@@ -29,9 +35,13 @@ class SecateurPanel(QDockWidget):
 
         self._communes = []
         self._selected_code = None
+        self._sections = []
+        self._selected_section = None
+        self._parcelles = []
+        self._selected_parcel = None
         self._result_layers = []
         self._commune_name = None
-        self._commune_geom = None
+        self._parcel_geom = None
         self._debounce_timer = QTimer(self)
         self._debounce_timer.setSingleShot(True)
         self._debounce_timer.setInterval(300)
@@ -60,6 +70,20 @@ class SecateurPanel(QDockWidget):
 
         search_row.addWidget(self.search_input)
         layout.addLayout(search_row)
+
+        # Section selector
+        layout.addWidget(QLabel("Section :"))
+        self.section_combo = QComboBox()
+        self.section_combo.setEnabled(False)
+        self.section_combo.currentIndexChanged.connect(self._on_section_selected)
+        layout.addWidget(self.section_combo)
+
+        # Parcelle selector
+        layout.addWidget(QLabel("Parcelle :"))
+        self.parcelle_combo = QComboBox()
+        self.parcelle_combo.setEnabled(False)
+        self.parcelle_combo.currentIndexChanged.connect(self._on_parcel_selected)
+        layout.addWidget(self.parcelle_combo)
 
         # Buttons
         btn_row = QHBoxLayout()
@@ -118,27 +142,128 @@ class SecateurPanel(QDockWidget):
             if display == text:
                 self._selected_code = c["code"]
                 self._commune_name = c["nom"]
-                self.run_button.setEnabled(True)
+                # Reset downstream selections
+                self._sections = []
+                self._selected_section = None
+                self.section_combo.clear()
+                self.section_combo.setEnabled(False)
+                self.section_combo.setCurrentIndex(-1)
+                self._parcelles = []
+                self._selected_parcel = None
+                self.parcelle_combo.clear()
+                self.parcelle_combo.setEnabled(False)
+                self.parcelle_combo.setCurrentIndex(-1)
+                self.run_button.setEnabled(False)
                 self.status_label.setText(
                     f"Commune sélectionnée : {c['nom']} ({c['code']})"
                 )
+                # Load sections for this commune
+                self._load_sections()
                 return
 
-    def _on_run(self):
+    def _load_sections(self):
+        """Load sections for the currently selected commune and populate the combo box."""
         if not self._selected_code:
+            return
+        self._sections = list_sections(self._selected_code)
+        # Sections may be objects; use attribute access with fallback to dict get
+        display = []
+        for s in self._sections:
+            if isinstance(s, dict):
+                # Show the section identifier ("section") in the UI
+                display.append(str(s.get("section", "")))
+            else:
+                # Fallback to attribute "section" if object
+                display.append(str(getattr(s, "section", "")))
+        self.section_combo.blockSignals(True)
+        self.section_combo.clear()
+        self.section_combo.addItems(display)
+        self.section_combo.setEnabled(bool(display))
+        self.section_combo.blockSignals(False)
+        self.section_combo.setCurrentIndex(-1)
+
+    def _on_section_selected(self, index):
+        """Handle user selection of a section."""
+        if index < 0 or index >= len(self._sections):
+            return
+        sec = self._sections[index]
+        if isinstance(sec, dict):
+            self._selected_section = sec.get("section")
+        else:
+            self._selected_section = getattr(sec, "section", None)
+        # Update status label to show selected section
+        self.status_label.setText(f"Section sélectionnée : {self._selected_section}")
+        # Reset parcel selection
+        self._parcelles = []
+        self._selected_parcel = None
+        self.parcelle_combo.clear()
+        self.parcelle_combo.setEnabled(False)
+        self.parcelle_combo.setCurrentIndex(-1)
+        self.run_button.setEnabled(False)
+        # Load parcels for this commune and section
+        self._load_parcelles()
+
+    def _load_parcelles(self):
+        """Load parcels for the selected commune and section."""
+        if not (self._selected_code and self._selected_section):
+            return
+        # Retrieve all parcels for the commune and section
+        all_parcelles = list_parcelles(self._selected_code, self._selected_section)
+        # Filter parcels to keep only those belonging to the selected section (safety net)
+        self._parcelles = []
+        for p in all_parcelles:
+            if isinstance(p, dict):
+                if p.get("section") == self._selected_section:
+                    self._parcelles.append(p)
+            else:
+                if getattr(p, "section", None) == self._selected_section:
+                    self._parcelles.append(p)
+        # Build display list using parcel number ("numero")
+        display = []
+        for p in self._parcelles:
+            if isinstance(p, dict):
+                display.append(str(p.get("numero", "")))
+            else:
+                display.append(str(getattr(p, "numero", "")))
+        self.parcelle_combo.blockSignals(True)
+        self.parcelle_combo.clear()
+        self.parcelle_combo.addItems(display)
+        self.parcelle_combo.setEnabled(bool(display))
+        self.parcelle_combo.blockSignals(False)
+        self.parcelle_combo.setCurrentIndex(-1)
+
+    def _on_parcel_selected(self, index):
+        """Handle user selection of a parcel and enable the run button."""
+        if index < 0 or index >= len(self._parcelles):
+            return
+        parc = self._parcelles[index]
+        if isinstance(parc, dict):
+            parcel_id = parc.get("feature_id")
+            parcel_num = parc.get("numero", "")
+        else:
+            parcel_id = getattr(parc, "feature_id", None)
+            parcel_num = getattr(parc, "numero", "")
+        self._selected_parcel = parcel_id
+        self.run_button.setEnabled(True)
+        # Show the parcel number (or fallback to id) in the status label
+        display_num = parcel_num if parcel_num else str(parcel_id)
+        self.status_label.setText(f"Parcelle sélectionnée : {display_num}")
+
+    def _on_run(self):
+        if not (self._selected_code and self._selected_parcel):
             return
 
         self.run_button.setEnabled(False)
-        self.status_label.setText("Récupération de la géométrie de la commune…")
+        self.status_label.setText("Récupération de la géométrie de la parcelle…")
         self._force_repaint()
 
-        geom = fetch_commune_geometry(self._selected_code)
+        geom = fetch_parcel_geometry(self._selected_parcel)
         if geom is None or geom.isEmpty():
             self.status_label.setText("Erreur : impossible de récupérer la géométrie.")
             self.run_button.setEnabled(True)
             return
 
-        self._commune_geom = geom
+        self._parcel_geom = geom
 
         layers = find_wfs_layers()
         if not layers:
@@ -157,7 +282,7 @@ class SecateurPanel(QDockWidget):
                     current, total, f"Intersection {current + 1}/{total} : {name}"
                 )
 
-        results = intersect_commune(geom, layers, progress_callback=progress)
+        results = intersect_parcelle(geom, layers, progress_callback=progress)
 
         if results:
             add_results_to_project(results)
@@ -219,10 +344,16 @@ class SecateurPanel(QDockWidget):
                     current, total, f"Export PDF {current + 1}/{total} : {name}"
                 )
 
+            if self._parcel_geom is None:
+                self.status_label.setText(
+                    "Erreur : géométrie de la parcelle non disponible pour l'export PDF."
+                )
+                self._finish_progress(f"Export PDF annulé : géométrie manquante.")
+                return
             export_results_to_pdf(
                 self._result_layers,
                 self._commune_name or "",
-                self._commune_geom,
+                self._parcel_geom,
                 path,
                 progress_callback=progress,
             )

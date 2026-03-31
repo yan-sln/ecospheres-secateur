@@ -94,6 +94,19 @@ def intersect_commune(
     return results
 
 
+def intersect_parcelle(
+    parcelle_geom: QgsGeometry,
+    layers: list[QgsVectorLayer],
+    progress_callback=None,
+) -> list[QgsVectorLayer]:
+    """Intersect a parcel geometry with the given WFS layers.
+
+    This is a thin wrapper around :func:`intersect_commune` to keep the API
+    consistent with the UI expectations.
+    """
+    return intersect_commune(parcelle_geom, layers, progress_callback)
+
+
 def add_results_to_project(result_layers: list[QgsVectorLayer]):
     """Add result layers to the project under a 'Résultats secateur' group."""
     root = QgsProject.instance().layerTreeRoot()
