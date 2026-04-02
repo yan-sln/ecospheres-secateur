@@ -1,0 +1,4 @@
+.kilo/
+.pytest_cache/
+core/__pycache__/
+ui/__pycache__/

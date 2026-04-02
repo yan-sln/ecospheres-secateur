@@ -18,6 +18,7 @@ from ..core.entities_selector import (
     list_sections,
     list_parcelles,
     search_communes,
+    clear_cache,
 )
 from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.intersector import (
@@ -92,6 +93,10 @@ class SecateurPanel(QDockWidget):
         self.run_button.clicked.connect(self._on_run)
         btn_row.addWidget(self.run_button)
 
+        self.clear_cache_button = QPushButton("Vider le cache")
+        self.clear_cache_button.clicked.connect(self._on_clear_cache)
+        btn_row.addWidget(self.clear_cache_button)
+
         self.export_csv_button = QPushButton("Exporter CSV")
         self.export_csv_button.setEnabled(False)
         self.export_csv_button.clicked.connect(self._on_export_csv)
@@ -132,16 +137,26 @@ class SecateurPanel(QDockWidget):
         if len(text) < 2:
             return
         self._communes = search_communes(text)
-        display = [f"{c['nom']} ({c['code']})" for c in self._communes]
+        display = []
+        for c in self._communes:
+            # Handle GeoEntity objects (no need for dict fallback anymore)
+            name = getattr(c, 'name', '')
+            code = getattr(c, 'code', '')
+            display.append(f"{name} ({code})")
         self._completer_model.setStringList(display)
         self._completer.complete()
 
     def _on_commune_selected(self, text):
+        # Find the matching commune and extract its data
         for c in self._communes:
-            display = f"{c['nom']} ({c['code']})"
+            # Handle GeoEntity objects (no need for dict fallback anymore)
+            name = getattr(c, 'name', '')
+            code = getattr(c, 'code', '')
+            display = f"{name} ({code})"
             if display == text:
-                self._selected_code = c["code"]
-                self._commune_name = c["nom"]
+                self._selected_code = code
+                self._commune_name = name
+                
                 # Reset downstream selections
                 self._sections = []
                 self._selected_section = None
@@ -155,7 +170,7 @@ class SecateurPanel(QDockWidget):
                 self.parcelle_combo.setCurrentIndex(-1)
                 self.run_button.setEnabled(False)
                 self.status_label.setText(
-                    f"Commune sélectionnée : {c['nom']} ({c['code']})"
+                    f"Commune sélectionnée : {self._commune_name} ({self._selected_code})"
                 )
                 # Load sections for this commune
                 self._load_sections()
@@ -166,15 +181,12 @@ class SecateurPanel(QDockWidget):
         if not self._selected_code:
             return
         self._sections = list_sections(self._selected_code)
-        # Sections may be objects; use attribute access with fallback to dict get
+        # Sections are now GeoEntity objects; use attribute access
         display = []
         for s in self._sections:
-            if isinstance(s, dict):
-                # Show the section identifier ("section") in the UI
-                display.append(str(s.get("section", "")))
-            else:
-                # Fallback to attribute "section" if object
-                display.append(str(getattr(s, "section", "")))
+            # Handle GeoEntity objects (no need for dict fallback anymore)
+            # Show the section identifier ("section") in the UI
+            display.append(str(getattr(s, "section", "")))
         self.section_combo.blockSignals(True)
         self.section_combo.clear()
         self.section_combo.addItems(display)
@@ -187,10 +199,8 @@ class SecateurPanel(QDockWidget):
         if index < 0 or index >= len(self._sections):
             return
         sec = self._sections[index]
-        if isinstance(sec, dict):
-            self._selected_section = sec.get("section")
-        else:
-            self._selected_section = getattr(sec, "section", None)
+        # Handle GeoEntity objects (no need for dict fallback anymore)
+        self._selected_section = getattr(sec, "section", None)
         # Update status label to show selected section
         self.status_label.setText(f"Section sélectionnée : {self._selected_section}")
         # Reset parcel selection
@@ -212,19 +222,14 @@ class SecateurPanel(QDockWidget):
         # Filter parcels to keep only those belonging to the selected section (safety net)
         self._parcelles = []
         for p in all_parcelles:
-            if isinstance(p, dict):
-                if p.get("section") == self._selected_section:
-                    self._parcelles.append(p)
-            else:
-                if getattr(p, "section", None) == self._selected_section:
-                    self._parcelles.append(p)
+            # Handle GeoEntity objects (no need for dict fallback anymore)
+            if getattr(p, "section", None) == self._selected_section:
+                self._parcelles.append(p)
         # Build display list using parcel number ("numero")
         display = []
         for p in self._parcelles:
-            if isinstance(p, dict):
-                display.append(str(p.get("numero", "")))
-            else:
-                display.append(str(getattr(p, "numero", "")))
+            # Handle GeoEntity objects (no need for dict fallback anymore)
+            display.append(str(getattr(p, "numero", "")))
         self.parcelle_combo.blockSignals(True)
         self.parcelle_combo.clear()
         self.parcelle_combo.addItems(display)
@@ -237,12 +242,9 @@ class SecateurPanel(QDockWidget):
         if index < 0 or index >= len(self._parcelles):
             return
         parc = self._parcelles[index]
-        if isinstance(parc, dict):
-            parcel_id = parc.get("feature_id")
-            parcel_num = parc.get("numero", "")
-        else:
-            parcel_id = getattr(parc, "feature_id", None)
-            parcel_num = getattr(parc, "numero", "")
+        # Handle GeoEntity objects (no need for dict fallback anymore)
+        parcel_id = getattr(parc, "feature_id", None)
+        parcel_num = getattr(parc, "numero", "")
         self._selected_parcel = parcel_id
         self.run_button.setEnabled(True)
         # Show the parcel number (or fallback to id) in the status label
@@ -257,7 +259,10 @@ class SecateurPanel(QDockWidget):
         self.status_label.setText("Récupération de la géométrie de la parcelle…")
         self._force_repaint()
 
-        geom = fetch_parcel_geometry(self._selected_parcel)
+        # Convert parcel ID to GeoEntity for the new interface
+        from geoselector.core.entities import Parcelle
+        parcel_obj = Parcelle.from_api({"id": self._selected_parcel, "properties": {}})
+        geom = fetch_parcel_geometry(parcel_obj)
         if geom is None or geom.isEmpty():
             self.status_label.setText("Erreur : impossible de récupérer la géométrie.")
             self.run_button.setEnabled(True)
@@ -360,6 +365,14 @@ class SecateurPanel(QDockWidget):
             self._finish_progress(f"Export PDF : {path}")
         except Exception as e:
             self._finish_progress(f"Erreur export PDF : {e}")
+
+    def _on_clear_cache(self):
+        """Clear the cache of geoselector and update UI."""
+        try:
+            clear_cache()
+            self.status_label.setText("Cache vidé avec succès.")
+        except Exception as e:
+            self.status_label.setText(f"Erreur lors du vidage du cache : {e}")
 
     def _start_progress(self, total):
         self.progress_bar.setMaximum(total)
