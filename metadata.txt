@@ -1,5 +1,5 @@
 [general]
-name=Ecosphères Secateur
+name=Ecosphères Cadrage
 qgisMinimumVersion=3.28
 description=Intersecte les couches WFS du projet avec le contour d'une commune et extrait les entités concernées.
 version=0.1.0

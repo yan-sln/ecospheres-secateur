@@ -1,11 +1,20 @@
-# Ecosphères Sécateur
+# Ecosphères Cadrage
 
-Plugin QGIS d'intersection spatiale. Sélectionnez une commune, le plugin intersecte automatiquement toutes les couches WFS visibles du projet et extrait les entités concernées.
+Plugin QGIS de sélection géographique. Sélectionnez une commune, le plugin interroge automatiquement toutes les couches WFS visibles du projet et extrait les entités concernées.
+
+## Flux de travail
+
+Le plugin permet aux utilisateurs de :
+
+- Sélectionner une commune à partir de la liste déroulante de recherche
+- Choisir une section au sein de cette commune
+- Récupérer automatiquement toutes les parcelles de cette section
+- Créer des couches mémoire pour les résultats groupées sous "Résultats cadrage"
 
 ## Fonctionnalités
 - **Recherche** avec autocomplétion via le module `geoselector`.
-- **Intersection automatique** de toutes les couches WFS visibles du projet avec le contour de la parcelle.
-- **Résultats en couches mémoire** regroupées dans un groupe "Résultats secateur".
+- **Sélection géographique** de toutes les parcelles dans une section.
+- **Résultats en couches mémoire** regroupées dans un groupe "Résultats cadrage".
 - **Export CSV** — un fichier par couche dans un dossier au choix.
 - **Export PDF** — rapport cartographique multi-pages avec fond de carte IGN Plan IGN v2.
 
@@ -30,14 +39,11 @@ Puis dans QGIS : **Extensions > Gérer/Installer > chercher "Ecosphères Séca
 | Ressources | `resources/icon.png`, `resources/report_page.qpt` | fournis dans le dépôt |
 
 ## Utilisation du plugin
-1. Activer le plugin depuis le menu **Extensions → Gérer/Installer → Ecosphères Sécateur**.
+1. Activer le plugin depuis le menu **Extensions → Gérer/Installer → Ecosphères Cadrage**.
 2. Un icône apparaît dans la barre d’outils ; cliquer dessus pour ouvrir le panneau latéral.
 3. Taper le nom d’une commune (au moins 2 caractères) et choisir dans la liste proposée.
-4. Sélectionner la section puis la parcelle souhaitées.
-5. Cliquer **Interroger** : le plugin récupère la géométrie, trouve les couches WFS visibles et crée des calques mémoire contenant les entités intersectées.
-6. Les résultats apparaissent dans le groupe "Résultats secateur" du projet.
-7. **Exporter CSV** : choisir un répertoire, chaque couche résultat devient un fichier `nom_couche.csv`.
-8. **Exporter PDF** : choisir un fichier, le rapport comprend une page d’overview + une page par couche résultat avec le fond de carte IGN.
+4. Sélectionner la section puis cliquer **Interroger** : le plugin récupère les géométries des parcelles et crée des calques mémoire contenant toutes les parcelles de la section.
+5. Les résultats apparaissent dans le groupe "Résultats cadrage" du projet.
 
 ## Développement & tests
 ```bash
@@ -71,16 +77,7 @@ uv run pyright
 - **Tests manuels** : lancer le plugin, sélectionner des entités, vérifier que les calques mémoire apparaissent et que les exports s’ouvrent sans erreur.
 - **Future** : ajouter une suite de tests unitaires (pytest) et CI (GitHub Actions).
 
-### Personnaliser le modèle PDF
 
-Le rapport PDF utilise le modèle `resources/report_page.qpt`. Pour le modifier :
-
-1. Dans QGIS, ouvrir **Projet > Gestionnaire de mises en page**
-2. Créer une nouvelle mise en page vide (**Mise en page vide > Créer…**)
-3. Dans le composeur, **Mise en page > Ajouter des éléments depuis un modèle…** et sélectionner `report_page.qpt`
-4. Modifier librement : polices, positions, ajouter un logo, une barre d'échelle, une flèche nord, etc.
-5. Sauvegarder avec **Mise en page > Sauvegarder comme modèle…** en écrasant `report_page.qpt`
-
-Les deux éléments que le code utilise ont un **ID d'élément** (visible dans Propriétés de l'élément) qu'il faut conserver :
-- `title` — le libellé texte du titre (nom de commune ou de couche)
-- `map` — l'élément carte qui affiche les résultats
+# Dev
+* Ne fonctionne pas encore sur la ville de Paris
+* Mettre à jour metadata.tx

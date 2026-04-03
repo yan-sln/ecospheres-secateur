@@ -1,9 +1,14 @@
+import os
+
+# Import using absolute path instead of relative
+import sys
+
+from qgis.core import QgsLayerTreeGroup, QgsProject  # noqa: UP035
 from qgis.PyQt.QtCore import QStringListModel, Qt, QTimer  # noqa: UP035
 from qgis.PyQt.QtWidgets import (  # noqa: UP035
     QComboBox,
     QCompleter,
     QDockWidget,
-    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -13,28 +18,20 @@ from qgis.PyQt.QtWidgets import (  # noqa: UP035
     QWidget,
 )
 
-# Import using absolute path instead of relative
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + "/..")
 
 from core.entities_selector import (
-    fetch_parcel_geometry,
-    list_sections,
-    list_parcelles,
-    search_communes,
     clear_cache,
-)
-from core.export import export_results_to_csv, export_results_to_pdf
-from core.intersector import (
-    add_results_to_project,
-    find_wfs_layers,
+    fetch_parcel_geometry,
+    list_parcelles,
+    list_sections,
+    search_communes,
 )
 
 
-class SecateurPanel(QDockWidget):
+class CadragePanel(QDockWidget):
     def __init__(self, iface, parent=None):
-        super().__init__("Ecosphères Secateur", parent or iface.mainWindow())
+        super().__init__("Ecosphères Cadrage", iface.mainWindow())
         self.iface = iface
         self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
 
@@ -43,8 +40,6 @@ class SecateurPanel(QDockWidget):
         self._sections = []
         self._selected_section = None
         self._parcelles = []
-        self._selected_parcel = None
-        self._result_layers = []
         self._commune_name = None
         self._parcel_geom = None
         self._debounce_timer = QTimer(self)
@@ -83,13 +78,6 @@ class SecateurPanel(QDockWidget):
         self.section_combo.currentIndexChanged.connect(self._on_section_selected)
         layout.addWidget(self.section_combo)
 
-        # Parcelle selector
-        layout.addWidget(QLabel("Parcelle :"))
-        self.parcelle_combo = QComboBox()
-        self.parcelle_combo.setEnabled(False)
-        self.parcelle_combo.currentIndexChanged.connect(self._on_parcel_selected)
-        layout.addWidget(self.parcelle_combo)
-
         # Buttons
         btn_row = QHBoxLayout()
         self.run_button = QPushButton("Interroger")
@@ -100,16 +88,6 @@ class SecateurPanel(QDockWidget):
         self.clear_cache_button = QPushButton("Vider le cache")
         self.clear_cache_button.clicked.connect(self._on_clear_cache)
         btn_row.addWidget(self.clear_cache_button)
-
-        self.export_csv_button = QPushButton("Exporter CSV")
-        self.export_csv_button.setEnabled(False)
-        self.export_csv_button.clicked.connect(self._on_export_csv)
-        btn_row.addWidget(self.export_csv_button)
-
-        self.export_pdf_button = QPushButton("Exporter PDF")
-        self.export_pdf_button.setEnabled(False)
-        self.export_pdf_button.clicked.connect(self._on_export_pdf)
-        btn_row.addWidget(self.export_pdf_button)
 
         layout.addLayout(btn_row)
 
@@ -144,8 +122,8 @@ class SecateurPanel(QDockWidget):
         display = []
         for c in self._communes:
             # Handle GeoEntity objects (no need for dict fallback anymore)
-            name = getattr(c, 'name', '')
-            code = getattr(c, 'code', '')
+            name = getattr(c, "name", "")
+            code = getattr(c, "code", "")
             display.append(f"{name} ({code})")
         self._completer_model.setStringList(display)
         self._completer.complete()
@@ -154,13 +132,13 @@ class SecateurPanel(QDockWidget):
         # Find the matching commune and extract its data
         for c in self._communes:
             # Handle GeoEntity objects (no need for dict fallback anymore)
-            name = getattr(c, 'name', '')
-            code = getattr(c, 'code', '')
+            name = getattr(c, "name", "")
+            code = getattr(c, "code", "")
             display = f"{name} ({code})"
             if display == text:
                 self._selected_code = code
                 self._commune_name = name
-                
+
                 # Reset downstream selections
                 self._sections = []
                 self._selected_section = None
@@ -168,14 +146,8 @@ class SecateurPanel(QDockWidget):
                 self.section_combo.setEnabled(False)
                 self.section_combo.setCurrentIndex(-1)
                 self._parcelles = []
-                self._selected_parcel = None
-                self.parcelle_combo.clear()
-                self.parcelle_combo.setEnabled(False)
-                self.parcelle_combo.setCurrentIndex(-1)
                 self.run_button.setEnabled(False)
-                self.status_label.setText(
-                    f"Commune sélectionnée : {self._commune_name} ({self._selected_code})"
-                )
+                self.status_label.setText(f"Commune sélectionnée : {self._commune_name} ({self._selected_code})")
                 # Load sections for this commune
                 self._load_sections()
                 return
@@ -207,13 +179,8 @@ class SecateurPanel(QDockWidget):
         self._selected_section = getattr(sec, "section", None)
         # Update status label to show selected section
         self.status_label.setText(f"Section sélectionnée : {self._selected_section}")
-        # Reset parcel selection
-        self._parcelles = []
-        self._selected_parcel = None
-        self.parcelle_combo.clear()
-        self.parcelle_combo.setEnabled(False)
-        self.parcelle_combo.setCurrentIndex(-1)
-        self.run_button.setEnabled(False)
+        # Enable run button immediately after section selection
+        self.run_button.setEnabled(True)
         # Load parcels for this commune and section
         self._load_parcelles()
 
@@ -234,12 +201,6 @@ class SecateurPanel(QDockWidget):
         for p in self._parcelles:
             # Handle GeoEntity objects (no need for dict fallback anymore)
             display.append(str(getattr(p, "numero", "")))
-        self.parcelle_combo.blockSignals(True)
-        self.parcelle_combo.clear()
-        self.parcelle_combo.addItems(display)
-        self.parcelle_combo.setEnabled(bool(display))
-        self.parcelle_combo.blockSignals(False)
-        self.parcelle_combo.setCurrentIndex(-1)
 
     def _on_parcel_selected(self, index):
         """Handle user selection of a parcel and enable the run button."""
@@ -256,148 +217,179 @@ class SecateurPanel(QDockWidget):
         self.status_label.setText(f"Parcelle sélectionnée : {display_num}")
 
     def _on_run(self):
-        if not (self._selected_code and self._selected_parcel):
+        if not (self._selected_code and self._selected_section):
             return
 
         self.run_button.setEnabled(False)
-        self.status_label.setText("Récupération de la géométrie de la parcelle…")
+        self.status_label.setText("Récupération des géométries des parcelles…")
         self._force_repaint()
 
-        # Use the existing parcel object which already has service initialized
-        # This avoids recreating the parcel and losing service initialization
+        # Get all parcels in the selected section
         if not self._parcelles:
             self.status_label.setText("Erreur : aucune parcelle disponible.")
             self.run_button.setEnabled(True)
             return
-            
-        # Find the selected parcel object from our existing list
-        parcel_obj = None
-        for p in self._parcelles:
-            if getattr(p, "feature_id", None) == self._selected_parcel:
-                parcel_obj = p
-                break
-                
-        if parcel_obj is None:
-            self.status_label.setText("Erreur : parcelle non trouvée dans la liste.")
-            self.run_button.setEnabled(True)
-            return
 
-        geom = fetch_parcel_geometry(parcel_obj)
-        if geom is None or geom.isEmpty():
-            self.status_label.setText("Erreur : impossible de récupérer la géométrie.")
-            self.run_button.setEnabled(True)
-            return
+        # Process all parcels in the section
+        successful_layers = []
+        failed_count = 0
 
-        self._parcel_geom = geom
+        total_parcelles = len(self._parcelles)
+        self._start_progress(total_parcelles)
 
-        # Create a new layer with the parcel geometry instead of intersecting with WFS layers
-        try:
-            # Import here to avoid circular imports
-            from qgis.core import QgsVectorLayer, QgsFeature, QgsGeometry, QgsField, QgsProject, QgsVectorDataProvider
-            from PyQt5.QtCore import QVariant
-            
-            # Create a memory layer for the parcel
-            layer = QgsVectorLayer("Polygon?crs=EPSG:4326", "Parcelle sélectionnée", "memory")
-            provider = layer.dataProvider()
-            
-            # Add fields for parcel information
-            if provider is not None:
-                provider.addAttributes([
-                    QgsField("commune_code", QVariant.String),
-                    QgsField("section", QVariant.String),
-                    QgsField("numero", QVariant.String),
-                    QgsField("feature_id", QVariant.String)
-                ])
-                layer.updateFields()
-                
-                # Create a feature with the geometry
-                feature = QgsFeature()
-                feature.setGeometry(geom)
-                feature.setAttributes([
-                    self._selected_code,
-                    getattr(parcel_obj, "section", ""),
-                    getattr(parcel_obj, "numero", ""),
-                    getattr(parcel_obj, "feature_id", "")
-                ])
-                
-                # Add the feature to the layer
-                if provider.addFeature(feature):
-                    # Add layer to the project
-                    project = QgsProject.instance()
-                    if project:
-                        project.addMapLayer(layer)
-                        self.status_label.setText(f"Parcelle {getattr(parcel_obj, 'numero', '')} affichée dans une nouvelle couche.")
+        for i, parcel_obj in enumerate(self._parcelles):
+            try:
+                # Fetch geometry for this parcel
+                geom = fetch_parcel_geometry(parcel_obj)
+                if geom is None or geom.isEmpty():
+                    self.status_label.setText(
+                        f"Erreur : impossible de récupérer la géométrie de la parcelle {getattr(parcel_obj, 'numero', 'inconnue')}."
+                    )
+                    failed_count += 1
+                    self._update_progress(
+                        i,
+                        total_parcelles,
+                        f"Parcelle {getattr(parcel_obj, 'numero', 'inconnue')} : erreur",
+                    )
+                    continue
+
+                # Create a memory layer for this parcel
+                from PyQt5.QtCore import QVariant
+                from qgis.core import (
+                    QgsFeature,
+                    QgsField,
+                    QgsProject,
+                    QgsVectorLayer,
+                )
+
+                # Create layer name using parcel number
+                parcel_num = getattr(parcel_obj, "numero", "")
+                layer_name = (
+                    f"Parcelle {parcel_num}"
+                    if parcel_num
+                    else f"Parcelle {getattr(parcel_obj, 'feature_id', 'inconnue')}"
+                )
+
+                # Create a memory layer for the parcel
+                layer = QgsVectorLayer("Polygon?crs=EPSG:4326", layer_name, "memory")
+                provider = layer.dataProvider()
+
+                # Add fields for parcel information
+                if provider is not None:
+                    provider.addAttributes(
+                        [
+                            QgsField("commune_code", QVariant.String),
+                            QgsField("section", QVariant.String),
+                            QgsField("numero", QVariant.String),
+                            QgsField("feature_id", QVariant.String),
+                        ]
+                    )
+                    layer.updateFields()
+
+                    # Create a feature with the geometry
+                    feature = QgsFeature()
+                    feature.setGeometry(geom)
+                    feature.setAttributes(
+                        [
+                            self._selected_code,
+                            getattr(parcel_obj, "section", ""),
+                            getattr(parcel_obj, "numero", ""),
+                            getattr(parcel_obj, "feature_id", ""),
+                        ]
+                    )
+
+                    # Add the feature to the layer
+                    if provider.addFeature(feature):
+                        successful_layers.append(layer)
+                        self._update_progress(i, total_parcelles, f"Parcelle {parcel_num} : ajoutée")
                     else:
-                        self.status_label.setText("Erreur : impossible d'ajouter la couche au projet.")
+                        self.status_label.setText(
+                            f"Erreur : impossible d'ajouter la feature à la couche pour la parcelle {parcel_num}."
+                        )
+                        failed_count += 1
+                        self._update_progress(i, total_parcelles, f"Parcelle {parcel_num} : erreur")
                 else:
-                    self.status_label.setText("Erreur : impossible d'ajouter la feature à la couche.")
-            else:
-                self.status_label.setText("Erreur : impossible de créer le fournisseur de données.")
-                
-        except Exception as e:
-            self.status_label.setText(f"Erreur lors de la création de la couche : {str(e)}")
+                    self.status_label.setText(
+                        f"Erreur : impossible de créer le fournisseur de données pour la parcelle {parcel_num}."
+                    )
+                    failed_count += 1
+                    self._update_progress(i, total_parcelles, f"Parcelle {parcel_num} : erreur")
+
+            except Exception as e:
+                self.status_label.setText(
+                    f"Erreur lors du traitement de la parcelle {getattr(parcel_obj, 'numero', 'inconnue')} : {str(e)}"
+                )
+                failed_count += 1
+                self._update_progress(
+                    i,
+                    total_parcelles,
+                    f"Parcelle {getattr(parcel_obj, 'numero', 'inconnue')} : erreur",
+                )
+
+        # Group layers hierarchically after creation
+        if successful_layers:
+            self._group_layers_by_commune_and_section(successful_layers)
+
+        # Add all layers to the project after grouping
+        project = QgsProject.instance()
+        if project and successful_layers:
+            for layer in successful_layers:
+                project.addMapLayer(layer, False)
+
+        # Finish progress and update status
+        self._finish_progress(
+            f"Traitement terminé : {len(successful_layers)} parcelle(s) traitée(s), {failed_count} échec(s)."
+        )
 
         self.run_button.setEnabled(True)
 
-    def _on_export_csv(self):
-        if not self._result_layers:
-            return
-        folder = QFileDialog.getExistingDirectory(self, "Dossier d'export CSV")
-        if not folder:
-            return
+    def _group_layers_by_commune_and_section(self, layers):
+        """Group layers hierarchically by commune and section."""
         try:
-            total = len(self._result_layers)
-            self._start_progress(total)
+            project = QgsProject.instance()
+            if project:
+                root = project.layerTreeRoot()
+                if root:
+                    # Get the section and commune info from the panel data
+                    section_code = self._selected_section
+                    commune_name = self._commune_name or "Commune inconnue"
 
-            def progress(current, total, name):
-                self._update_progress(
-                    current, total, f"Export CSV {current + 1}/{total} : {name}"
-                )
+                    # Create commune group if it doesn't exist
+                    commune_group_name = commune_name
+                    commune_group = None
 
-            written = export_results_to_csv(self._result_layers, folder, progress)
-            self._finish_progress(
-                f"Export CSV : {len(written)} fichier(s) dans {folder}"
-            )
-        except Exception as e:
-            self._finish_progress(f"Erreur export CSV : {e}")
+                    # Look for existing commune group
+                    for child in root.children() if root.children() else []:
+                        if isinstance(child, QgsLayerTreeGroup) and child.name() == commune_group_name:
+                            commune_group = child
+                            break
 
-    def _on_export_pdf(self):
-        if not self._result_layers:
-            return
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Exporter le rapport PDF",
-            "",
-            "PDF (*.pdf)",
-            options=QFileDialog.Options(),
-        )
-        if not path:
-            return
-        try:
-            total = 1 + len(self._result_layers)
-            self._start_progress(total)
+                    # Create commune group if it doesn't exist
+                    if not commune_group:
+                        commune_group = root.addGroup(commune_group_name)
 
-            def progress(current, total, name):
-                self._update_progress(
-                    current, total, f"Export PDF {current + 1}/{total} : {name}"
-                )
+                    # Create section group inside commune group
+                    section_group_name = f"Section {section_code}"
+                    section_group = None
 
-            if self._parcel_geom is None:
-                self.status_label.setText(
-                    "Erreur : géométrie de la parcelle non disponible pour l'export PDF."
-                )
-                self._finish_progress(f"Export PDF annulé : géométrie manquante.")
-                return
-            export_results_to_pdf(
-                self._result_layers,
-                self._commune_name or "",
-                self._parcel_geom,
-                path,
-                progress_callback=progress,
-            )
-            self._finish_progress(f"Export PDF : {path}")
-        except Exception as e:
-            self._finish_progress(f"Erreur export PDF : {e}")
+                    # Look for existing section group
+                    if commune_group:
+                        for child in commune_group.children() if commune_group.children() else []:
+                            if isinstance(child, QgsLayerTreeGroup) and child.name() == section_group_name:
+                                section_group = child
+                                break
+
+                    # Create section group if it doesn't exist
+                    if not section_group and commune_group:
+                        section_group = commune_group.addGroup(section_group_name)
+
+                    # Move all layers to the section group
+                    if section_group:
+                        for layer in layers:
+                            section_group.addLayer(layer)
+        except Exception:
+            # Silently ignore errors in grouping to prevent breaking the main functionality
+            pass
 
     def _on_clear_cache(self):
         """Clear the cache of geoselector and update UI."""

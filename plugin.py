@@ -4,7 +4,7 @@ from qgis.PyQt.QtCore import Qt  # noqa: UP035
 from qgis.PyQt.QtGui import QIcon  # noqa: UP035
 from qgis.PyQt.QtWidgets import QAction  # noqa: UP035
 
-from .ui.panel import SecateurPanel
+from .ui.panel import CadragePanel
 
 
 class Plugin:
@@ -16,11 +16,11 @@ class Plugin:
     def initGui(self):
         icon_path = os.path.join(os.path.dirname(__file__), "resources", "icon.png")
         icon = QIcon(icon_path) if os.path.exists(icon_path) else QIcon()
-        self.action = QAction(icon, "Ecosphères Secateur", self.iface.mainWindow())
+        self.action = QAction(icon, "Ecosphères Cadrage", self.iface.mainWindow())
         self.action.setCheckable(True)
         self.action.triggered.connect(self._toggle_panel)
         self.iface.addToolBarIcon(self.action)
-        self.iface.addPluginToMenu("&Ecosphères Secateur", self.action)
+        self.iface.addPluginToMenu("&Ecosphères Cadrage", self.action)
 
     def unload(self):
         if self.action:
@@ -33,7 +33,7 @@ class Plugin:
 
     def _toggle_panel(self, checked):
         if self.panel is None:
-            self.panel = SecateurPanel(self.iface)
+            self.panel = CadragePanel(self.iface)
             self.iface.addDockWidget(Qt.RightDockWidgetArea, self.panel)
             if self.action:
                 self.panel.visibilityChanged.connect(self.action.setChecked)

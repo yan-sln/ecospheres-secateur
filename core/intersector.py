@@ -1,14 +1,8 @@
 from qgis.core import (
-    QgsCoordinateReferenceSystem,
-    QgsCoordinateTransform,
-    QgsFeature,
-    QgsFeatureRequest,
-    QgsGeometry,
     QgsLayerTreeGroup,
     QgsLayerTreeLayer,
     QgsProject,
     QgsVectorLayer,
-    QgsWkbTypes,
 )
 
 
@@ -44,25 +38,3 @@ def _is_wfs(layer: QgsVectorLayer) -> bool:
     # Some WFS layers are loaded via OGR — check source URI
     src = layer.source().lower()
     return "service=wfs" in src or "/wfs?" in src or "/wfs/" in src
-
-
-def add_results_to_project(result_layers: list[QgsVectorLayer]):
-    """Add result layers to the project under a 'Résultats secateur' group."""
-    project = QgsProject.instance()
-    if project is None:
-        return
-    
-    root = project.layerTreeRoot()
-    if root is None:
-        return
-
-    group = root.findGroup("Résultats secateur")
-    if group:
-        group.removeAllChildren()
-    else:
-        group = root.insertGroup(0, "Résultats secateur")
-
-    for layer in result_layers:
-        project.addMapLayer(layer, False)
-        if group is not None:
-            group.addLayer(layer)
