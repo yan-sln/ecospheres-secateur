@@ -259,9 +259,25 @@ class SecateurPanel(QDockWidget):
         self.status_label.setText("Récupération de la géométrie de la parcelle…")
         self._force_repaint()
 
-        # Convert parcel ID to GeoEntity for the new interface
-        from geoselector.core.entities import Parcelle
-        parcel_obj = Parcelle.from_api({"id": self._selected_parcel, "properties": {}})
+        # Use the existing parcel object which already has service initialized
+        # This avoids recreating the parcel and losing service initialization
+        if not self._parcelles:
+            self.status_label.setText("Erreur : aucune parcelle disponible.")
+            self.run_button.setEnabled(True)
+            return
+            
+        # Find the selected parcel object from our existing list
+        parcel_obj = None
+        for p in self._parcelles:
+            if getattr(p, "feature_id", None) == self._selected_parcel:
+                parcel_obj = p
+                break
+                
+        if parcel_obj is None:
+            self.status_label.setText("Erreur : parcelle non trouvée dans la liste.")
+            self.run_button.setEnabled(True)
+            return
+
         geom = fetch_parcel_geometry(parcel_obj)
         if geom is None or geom.isEmpty():
             self.status_label.setText("Erreur : impossible de récupérer la géométrie.")

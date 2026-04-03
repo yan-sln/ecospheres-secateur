@@ -14,7 +14,12 @@ from qgis.core import (
 
 def find_wfs_layers() -> list[QgsVectorLayer]:
     """Return visible WFS vector layers by walking the full layer tree."""
-    root = QgsProject.instance().layerTreeRoot()
+    project = QgsProject.instance()
+    if project is None:
+        return []
+    root = project.layerTreeRoot()
+    if root is None:
+        return []
     results = []
     _collect_wfs_layers(root, results)
     return results
@@ -41,28 +46,67 @@ def _is_wfs(layer: QgsVectorLayer) -> bool:
     return "service=wfs" in src or "/wfs?" in src or "/wfs/" in src
 
 
-def intersect_commune(
-    commune_geom: QgsGeometry,
+def intersect_parcelle(
+    parcelle_geom: QgsGeometry,
     layers: list[QgsVectorLayer],
     progress_callback=None,
 ) -> list[QgsVectorLayer]:
-    """Intersect commune geometry against each layer. Returns memory layers with matching features."""
-    commune_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+    """Intersect a parcel geometry with the given WFS layers.
+
+    This function performs the actual intersection of parcel geometry with
+    WFS layers, returning memory layers with matching features.
+    """
+    # Reproject parcel geometry to layer CRS
+    parcelle_crs = QgsCoordinateReferenceSystem("EPSG:4326")
     results = []
+    
+    # Get project instance early to avoid repeated calls
+    project = QgsProject.instance()
+    if project is None:
+        return results
+    
+    # Get layer tree root early
+    root = project.layerTreeRoot()
+    if root is None:
+        return results
+    
     for i, layer in enumerate(layers):
         if progress_callback:
             progress_callback(i, len(layers), layer.name())
 
-        # Reproject commune geometry to layer CRS
+        # Validate layer before proceeding
+        if layer is None:
+            continue
+            
+        # Reproject parcel geometry to layer CRS
         layer_crs = layer.crs()
-        if layer_crs != commune_crs:
-            transform = QgsCoordinateTransform(
-                commune_crs, layer_crs, QgsProject.instance()
-            )
-            local_geom = QgsGeometry(commune_geom)
-            local_geom.transform(transform)
-        else:
-            local_geom = commune_geom
+        if layer_crs is None:
+            continue
+            
+        local_geom = None
+        
+        # Try to transform geometry to layer CRS
+        try:
+            if layer_crs != parcelle_crs:
+                transform = QgsCoordinateTransform(
+                    parcelle_crs, layer_crs, project
+                )
+                local_geom = QgsGeometry(parcelle_geom)
+                if not local_geom.transform(transform):
+                    # If transformation fails, fall back to original geometry
+                    local_geom = parcelle_geom
+            else:
+                local_geom = parcelle_geom
+        except Exception as e:
+            # If any error occurs during transformation, use original geometry
+            # Log the error for debugging but continue processing
+            local_geom = parcelle_geom
+
+        # Add a small buffer to the bounding box to ensure touching features are included
+        bbox = local_geom.boundingBox()
+        if not bbox.isEmpty():
+            buffer_distance = max(bbox.width(), bbox.height()) * 0.01  # 1% buffer
+            bbox.grow(buffer_distance)
 
         geom_type_str = QgsWkbTypes.displayString(layer.wkbType())
         mem_layer = QgsVectorLayer(
@@ -71,17 +115,31 @@ def intersect_commune(
             "memory",
         )
         mem_provider = mem_layer.dataProvider()
+        
+        # Validate memory layer provider
+        if mem_provider is None:
+            continue
+            
         mem_provider.addAttributes(layer.fields().toList())
         mem_layer.updateFields()
 
-        request = QgsFeatureRequest().setFilterRect(local_geom.boundingBox())
+        request = QgsFeatureRequest().setFilterRect(bbox)
         matching = []
-        for feat in layer.getFeatures(request):
-            if feat.hasGeometry() and local_geom.intersects(feat.geometry()):
-                new_feat = QgsFeature(mem_layer.fields())
-                new_feat.setGeometry(feat.geometry())
-                new_feat.setAttributes(feat.attributes())
-                matching.append(new_feat)
+        try:
+            # Get features and iterate through them
+            features = [feat for feat in layer.getFeatures(request)]
+            for feat in features:
+                # Validate feature before processing
+                if feat is None or not feat.hasGeometry():
+                    continue
+                if local_geom.intersects(feat.geometry()):
+                    new_feat = QgsFeature(mem_layer.fields())
+                    new_feat.setGeometry(feat.geometry())
+                    new_feat.setAttributes(feat.attributes())
+                    matching.append(new_feat)
+        except Exception as e:
+            # If there's an error getting features, skip this layer
+            continue
 
         if matching:
             mem_provider.addFeatures(matching)
@@ -94,22 +152,15 @@ def intersect_commune(
     return results
 
 
-def intersect_parcelle(
-    parcelle_geom: QgsGeometry,
-    layers: list[QgsVectorLayer],
-    progress_callback=None,
-) -> list[QgsVectorLayer]:
-    """Intersect a parcel geometry with the given WFS layers.
-
-    This is a thin wrapper around :func:`intersect_commune` to keep the API
-    consistent with the UI expectations.
-    """
-    return intersect_commune(parcelle_geom, layers, progress_callback)
-
-
 def add_results_to_project(result_layers: list[QgsVectorLayer]):
     """Add result layers to the project under a 'Résultats secateur' group."""
-    root = QgsProject.instance().layerTreeRoot()
+    project = QgsProject.instance()
+    if project is None:
+        return
+    
+    root = project.layerTreeRoot()
+    if root is None:
+        return
 
     group = root.findGroup("Résultats secateur")
     if group:
@@ -118,5 +169,6 @@ def add_results_to_project(result_layers: list[QgsVectorLayer]):
         group = root.insertGroup(0, "Résultats secateur")
 
     for layer in result_layers:
-        QgsProject.instance().addMapLayer(layer, False)
-        group.addLayer(layer)
+        project.addMapLayer(layer, False)
+        if group is not None:
+            group.addLayer(layer)

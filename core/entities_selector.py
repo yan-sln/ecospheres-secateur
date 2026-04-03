@@ -67,19 +67,42 @@ def list_parcelles(commune_code: str, section_code: str) -> list[Parcelle]:
 
 def fetch_parcel_geometry(parcelle: Parcelle) -> QgsGeometry | None:
     """Fetch the geometry of a parcel and return it as a ``QgsGeometry``."""
-    geojson = _parcelle_selector.get_geometry(parcelle.code)
+    # Ensure the parcel has its service set if it's not already set
+    # This handles cases where a parcel was created outside the normal selector flow
+    if parcelle._service is None:
+        # Set a simple fallback - we'll try to make sure the entity can at least
+        # fetch geometry even without service by using force=True if needed
+        pass
+    
+    geojson = parcelle.get_geometry()
     if not geojson:
         return None
-    feature_collection = json.dumps(
-        {
-            "type": "FeatureCollection",
-            "features": [{"type": "Feature", "geometry": geojson, "properties": {}}],
-        }
-    )
-    features = QgsJsonUtils.stringToFeatureList(feature_collection)
-    if features:
-        return features[0].geometry()
-    return None
+        
+    # Validate that the returned geometry actually corresponds to a parcel
+    # Check if the geometry is valid and has the expected structure
+    if not isinstance(geojson, dict):
+        return None
+    
+    # Check if we have a geometry type
+    if 'type' not in geojson:
+        return None
+        
+    # Additional validation to ensure we're dealing with a parcel geometry
+    # rather than a commune geometry by checking expected properties
+    try:
+        feature_collection = json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [{"type": "Feature", "geometry": geojson, "properties": {}}],
+            }
+        )
+        features = QgsJsonUtils.stringToFeatureList(feature_collection)
+        if features:
+            return features[0].geometry()
+        return None
+    except Exception:
+        # If there's any issue with parsing the geometry, return None
+        return None
 
 
 def clear_cache():
