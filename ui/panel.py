@@ -13,18 +13,22 @@ from qgis.PyQt.QtWidgets import (  # noqa: UP035
     QWidget,
 )
 
-from ..core.entities_selector import (
+# Import using absolute path instead of relative
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
+
+from core.entities_selector import (
     fetch_parcel_geometry,
     list_sections,
     list_parcelles,
     search_communes,
     clear_cache,
 )
-from ..core.export import export_results_to_csv, export_results_to_pdf
-from ..core.intersector import (
+from core.export import export_results_to_csv, export_results_to_pdf
+from core.intersector import (
     add_results_to_project,
     find_wfs_layers,
-    intersect_parcelle,
 )
 
 
@@ -286,39 +290,52 @@ class SecateurPanel(QDockWidget):
 
         self._parcel_geom = geom
 
-        layers = find_wfs_layers()
-        if not layers:
-            self.status_label.setText("Aucune couche WFS trouvée dans le projet.")
-            self.run_button.setEnabled(True)
-            return
-
-        self._start_progress(len(layers))
-        self._update_progress(
-            0, len(layers), f"Intersection avec {len(layers)} couche(s) WFS…"
-        )
-
-        def progress(current, total, name):
-            if current < total:
-                self._update_progress(
-                    current, total, f"Intersection {current + 1}/{total} : {name}"
-                )
-
-        results = intersect_parcelle(geom, layers, progress_callback=progress)
-
-        if results:
-            add_results_to_project(results)
-            self._result_layers = results
-            self.export_csv_button.setEnabled(True)
-            self.export_pdf_button.setEnabled(True)
-            total_feats = sum(r.featureCount() for r in results)
-            self._finish_progress(
-                f"Terminé — {total_feats} entité(s) trouvée(s) dans {len(results)} couche(s)."
-            )
-        else:
-            self._result_layers = []
-            self.export_csv_button.setEnabled(False)
-            self.export_pdf_button.setEnabled(False)
-            self._finish_progress("Aucune intersection trouvée.")
+        # Create a new layer with the parcel geometry instead of intersecting with WFS layers
+        try:
+            # Import here to avoid circular imports
+            from qgis.core import QgsVectorLayer, QgsFeature, QgsGeometry, QgsField, QgsProject, QgsVectorDataProvider
+            from PyQt5.QtCore import QVariant
+            
+            # Create a memory layer for the parcel
+            layer = QgsVectorLayer("Polygon?crs=EPSG:4326", "Parcelle sélectionnée", "memory")
+            provider = layer.dataProvider()
+            
+            # Add fields for parcel information
+            if provider is not None:
+                provider.addAttributes([
+                    QgsField("commune_code", QVariant.String),
+                    QgsField("section", QVariant.String),
+                    QgsField("numero", QVariant.String),
+                    QgsField("feature_id", QVariant.String)
+                ])
+                layer.updateFields()
+                
+                # Create a feature with the geometry
+                feature = QgsFeature()
+                feature.setGeometry(geom)
+                feature.setAttributes([
+                    self._selected_code,
+                    getattr(parcel_obj, "section", ""),
+                    getattr(parcel_obj, "numero", ""),
+                    getattr(parcel_obj, "feature_id", "")
+                ])
+                
+                # Add the feature to the layer
+                if provider.addFeature(feature):
+                    # Add layer to the project
+                    project = QgsProject.instance()
+                    if project:
+                        project.addMapLayer(layer)
+                        self.status_label.setText(f"Parcelle {getattr(parcel_obj, 'numero', '')} affichée dans une nouvelle couche.")
+                    else:
+                        self.status_label.setText("Erreur : impossible d'ajouter la couche au projet.")
+                else:
+                    self.status_label.setText("Erreur : impossible d'ajouter la feature à la couche.")
+            else:
+                self.status_label.setText("Erreur : impossible de créer le fournisseur de données.")
+                
+        except Exception as e:
+            self.status_label.setText(f"Erreur lors de la création de la couche : {str(e)}")
 
         self.run_button.setEnabled(True)
 
