@@ -121,17 +121,16 @@ class CadragePanel(QDockWidget):
         self._communes = search_communes(text)
         display = []
         for c in self._communes:
-            # Handle GeoEntity objects (no need for dict fallback anymore)
             name = getattr(c, "name", "")
             code = getattr(c, "code", "")
             display.append(f"{name} ({code})")
+        display.sort(key=str.lower)
         self._completer_model.setStringList(display)
         self._completer.complete()
 
     def _on_commune_selected(self, text):
         # Find the matching commune and extract its data
         for c in self._communes:
-            # Handle GeoEntity objects (no need for dict fallback anymore)
             name = getattr(c, "name", "")
             code = getattr(c, "code", "")
             display = f"{name} ({code})"
@@ -160,9 +159,9 @@ class CadragePanel(QDockWidget):
         # Sections are now GeoEntity objects; use attribute access
         display = []
         for s in self._sections:
-            # Handle GeoEntity objects (no need for dict fallback anymore)
             # Show the section identifier ("section") in the UI
-            display.append(str(getattr(s, "section", "")))
+            display.append(str(s.section))
+        display.sort(key=str.lower)
         self.section_combo.blockSignals(True)
         self.section_combo.clear()
         self.section_combo.addItems(display)
@@ -175,7 +174,6 @@ class CadragePanel(QDockWidget):
         if index < 0 or index >= len(self._sections):
             return
         sec = self._sections[index]
-        # Handle GeoEntity objects (no need for dict fallback anymore)
         self._selected_section = getattr(sec, "section", None)
         # Update status label to show selected section
         self.status_label.setText(f"Section sélectionnée : {self._selected_section}")
@@ -193,21 +191,14 @@ class CadragePanel(QDockWidget):
         # Filter parcels to keep only those belonging to the selected section (safety net)
         self._parcelles = []
         for p in all_parcelles:
-            # Handle GeoEntity objects (no need for dict fallback anymore)
             if getattr(p, "section", None) == self._selected_section:
                 self._parcelles.append(p)
-        # Build display list using parcel number ("numero")
-        display = []
-        for p in self._parcelles:
-            # Handle GeoEntity objects (no need for dict fallback anymore)
-            display.append(str(getattr(p, "numero", "")))
 
     def _on_parcel_selected(self, index):
         """Handle user selection of a parcel and enable the run button."""
         if index < 0 or index >= len(self._parcelles):
             return
         parc = self._parcelles[index]
-        # Handle GeoEntity objects (no need for dict fallback anymore)
         parcel_id = getattr(parc, "feature_id", None)
         parcel_num = getattr(parc, "numero", "")
         self._selected_parcel = parcel_id
@@ -242,8 +233,9 @@ class CadragePanel(QDockWidget):
                 # Fetch geometry for this parcel
                 geom = fetch_parcel_geometry(parcel_obj)
                 if geom is None or geom.isEmpty():
+                    parcel_num = getattr(parcel_obj, "numero", "inconnue")
                     self.status_label.setText(
-                        f"Erreur : impossible de récupérer la géométrie de la parcelle {getattr(parcel_obj, 'numero', 'inconnue')}."
+                        f"Erreur : impossible de récupérer la géométrie de la parcelle {parcel_num}."
                     )
                     failed_count += 1
                     self._update_progress(
@@ -251,6 +243,7 @@ class CadragePanel(QDockWidget):
                         total_parcelles,
                         f"Parcelle {getattr(parcel_obj, 'numero', 'inconnue')} : erreur",
                     )
+                    continue
                     continue
 
                 # Create a memory layer for this parcel

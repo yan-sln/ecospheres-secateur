@@ -12,8 +12,8 @@ from qgis.core import QgsGeometry, QgsJsonUtils
 
 # Attempt to import geoselector; if unavailable, provide stub selectors.
 try:
-    from geoselector.core.entities import Commune, Parcelle, Section
-    from geoselector.core.selector import SelectorFactory
+    from geoselector.core.entities import Commune, Parcelle, Section  # type: ignore
+    from geoselector.core.selector import SelectorFactory  # type: ignore
 
     _commune_selector = SelectorFactory.create_selector(Commune)
     _section_selector = SelectorFactory.create_selector(Section)
@@ -35,7 +35,7 @@ except ImportError:  # pragma: no cover
     _parcelle_selector = _StubSelector()
 except Exception:  # pragma: no cover
     # Fallback stubs that return empty results.
-    class _StubSelector:
+    class StubSelector1:
         def select(self, *args, **kwargs):
             return []
 
@@ -45,9 +45,9 @@ except Exception:  # pragma: no cover
         def clear_cache(self):
             pass
 
-    _commune_selector = _StubSelector()
-    _section_selector = _StubSelector()
-    _parcelle_selector = _StubSelector()
+    _commune_selector = StubSelector1()
+    _section_selector = StubSelector1()
+    _parcelle_selector = StubSelector1()
 
 
 def search_communes(text: str) -> list[Commune]:
@@ -134,8 +134,8 @@ def clear_cache():
     except Exception:
         # In case of failure, recreate selectors to clear their cache
         try:
-            from geoselector.core.entities import Commune, Parcelle, Section
-            from geoselector.core.selector import SelectorFactory
+            from geoselector.core.entities import Commune, Parcelle, Section  # type: ignore
+            from geoselector.core.selector import SelectorFactory  # type: ignore
 
             # Recreate selectors to clear their cache
             _commune_selector = SelectorFactory.create_selector(Commune)
