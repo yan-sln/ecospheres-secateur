@@ -14,11 +14,11 @@ from qgis.PyQt.QtWidgets import (  # noqa: UP035
 )
 
 from ..core.entities_selector import (
-    fetch_parcel_geometry,
-    list_sections,
-    list_parcelles,
-    search_communes,
     clear_cache,
+    fetch_parcel_geometry,
+    list_parcelles,
+    list_sections,
+    search_communes,
 )
 from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.intersector import (
@@ -140,9 +140,10 @@ class SecateurPanel(QDockWidget):
         display = []
         for c in self._communes:
             # Handle GeoEntity objects (no need for dict fallback anymore)
-            name = getattr(c, 'name', '')
-            code = getattr(c, 'code', '')
+            name = getattr(c, "name", "")
+            code = getattr(c, "code", "")
             display.append(f"{name} ({code})")
+        display.sort(key=str.lower)
         self._completer_model.setStringList(display)
         self._completer.complete()
 
@@ -150,13 +151,13 @@ class SecateurPanel(QDockWidget):
         # Find the matching commune and extract its data
         for c in self._communes:
             # Handle GeoEntity objects (no need for dict fallback anymore)
-            name = getattr(c, 'name', '')
-            code = getattr(c, 'code', '')
+            name = getattr(c, "name", "")
+            code = getattr(c, "code", "")
             display = f"{name} ({code})"
             if display == text:
                 self._selected_code = code
                 self._commune_name = name
-                
+
                 # Reset downstream selections
                 self._sections = []
                 self._selected_section = None
@@ -169,9 +170,7 @@ class SecateurPanel(QDockWidget):
                 self.parcelle_combo.setEnabled(False)
                 self.parcelle_combo.setCurrentIndex(-1)
                 self.run_button.setEnabled(False)
-                self.status_label.setText(
-                    f"Commune sélectionnée : {self._commune_name} ({self._selected_code})"
-                )
+                self.status_label.setText(f"Commune sélectionnée : {self._commune_name} ({self._selected_code})")
                 # Load sections for this commune
                 self._load_sections()
                 return
@@ -187,6 +186,7 @@ class SecateurPanel(QDockWidget):
             # Handle GeoEntity objects (no need for dict fallback anymore)
             # Show the section identifier ("section") in the UI
             display.append(str(getattr(s, "section", "")))
+        display.sort(key=str.lower)
         self.section_combo.blockSignals(True)
         self.section_combo.clear()
         self.section_combo.addItems(display)
@@ -230,6 +230,7 @@ class SecateurPanel(QDockWidget):
         for p in self._parcelles:
             # Handle GeoEntity objects (no need for dict fallback anymore)
             display.append(str(getattr(p, "numero", "")))
+        display.sort(key=str.lower)
         self.parcelle_combo.blockSignals(True)
         self.parcelle_combo.clear()
         self.parcelle_combo.addItems(display)
@@ -265,14 +266,14 @@ class SecateurPanel(QDockWidget):
             self.status_label.setText("Erreur : aucune parcelle disponible.")
             self.run_button.setEnabled(True)
             return
-            
+
         # Find the selected parcel object from our existing list
         parcel_obj = None
         for p in self._parcelles:
             if getattr(p, "feature_id", None) == self._selected_parcel:
                 parcel_obj = p
                 break
-                
+
         if parcel_obj is None:
             self.status_label.setText("Erreur : parcelle non trouvée dans la liste.")
             self.run_button.setEnabled(True)
@@ -293,15 +294,11 @@ class SecateurPanel(QDockWidget):
             return
 
         self._start_progress(len(layers))
-        self._update_progress(
-            0, len(layers), f"Intersection avec {len(layers)} couche(s) WFS…"
-        )
+        self._update_progress(0, len(layers), f"Intersection avec {len(layers)} couche(s) WFS…")
 
         def progress(current, total, name):
             if current < total:
-                self._update_progress(
-                    current, total, f"Intersection {current + 1}/{total} : {name}"
-                )
+                self._update_progress(current, total, f"Intersection {current + 1}/{total} : {name}")
 
         results = intersect_parcelle(geom, layers, progress_callback=progress)
 
@@ -311,9 +308,7 @@ class SecateurPanel(QDockWidget):
             self.export_csv_button.setEnabled(True)
             self.export_pdf_button.setEnabled(True)
             total_feats = sum(r.featureCount() for r in results)
-            self._finish_progress(
-                f"Terminé — {total_feats} entité(s) trouvée(s) dans {len(results)} couche(s)."
-            )
+            self._finish_progress(f"Terminé — {total_feats} entité(s) trouvée(s) dans {len(results)} couche(s).")
         else:
             self._result_layers = []
             self.export_csv_button.setEnabled(False)
@@ -333,14 +328,10 @@ class SecateurPanel(QDockWidget):
             self._start_progress(total)
 
             def progress(current, total, name):
-                self._update_progress(
-                    current, total, f"Export CSV {current + 1}/{total} : {name}"
-                )
+                self._update_progress(current, total, f"Export CSV {current + 1}/{total} : {name}")
 
             written = export_results_to_csv(self._result_layers, folder, progress)
-            self._finish_progress(
-                f"Export CSV : {len(written)} fichier(s) dans {folder}"
-            )
+            self._finish_progress(f"Export CSV : {len(written)} fichier(s) dans {folder}")
         except Exception as e:
             self._finish_progress(f"Erreur export CSV : {e}")
 
@@ -361,15 +352,11 @@ class SecateurPanel(QDockWidget):
             self._start_progress(total)
 
             def progress(current, total, name):
-                self._update_progress(
-                    current, total, f"Export PDF {current + 1}/{total} : {name}"
-                )
+                self._update_progress(current, total, f"Export PDF {current + 1}/{total} : {name}")
 
             if self._parcel_geom is None:
-                self.status_label.setText(
-                    "Erreur : géométrie de la parcelle non disponible pour l'export PDF."
-                )
-                self._finish_progress(f"Export PDF annulé : géométrie manquante.")
+                self.status_label.setText("Erreur : géométrie de la parcelle non disponible pour l'export PDF.")
+                self._finish_progress("Export PDF annulé : géométrie manquante.")
                 return
             export_results_to_pdf(
                 self._result_layers,

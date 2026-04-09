@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Entity selector utilities for communes, sections, and parcelles.
 
 This module provides a thin compatibility layer around the ``geoselector``
@@ -8,12 +7,13 @@ communes.
 """
 
 import json
+
 from qgis.core import QgsGeometry, QgsJsonUtils
 
 # Attempt to import geoselector; if unavailable, provide stub selectors.
 try:
-    from geoselector.core.selector import SelectorFactory
-    from geoselector.core.entities import Commune, Section, Parcelle
+    from geoselector.core.entities import Commune, Parcelle, Section  # type: ignore
+    from geoselector.core.selector import SelectorFactory  # type: ignore
 
     _commune_selector = SelectorFactory.create_selector(Commune)
     _section_selector = SelectorFactory.create_selector(Section)
@@ -26,7 +26,7 @@ except Exception:  # pragma: no cover
 
         def get_geometry(self, *args, **kwargs):
             return None
-            
+
         def clear_cache(self):
             pass
 
@@ -73,20 +73,20 @@ def fetch_parcel_geometry(parcelle: Parcelle) -> QgsGeometry | None:
         # Set a simple fallback - we'll try to make sure the entity can at least
         # fetch geometry even without service by using force=True if needed
         pass
-    
+
     geojson = parcelle.get_geometry()
     if not geojson:
         return None
-        
+
     # Validate that the returned geometry actually corresponds to a parcel
     # Check if the geometry is valid and has the expected structure
     if not isinstance(geojson, dict):
         return None
-    
+
     # Check if we have a geometry type
-    if 'type' not in geojson:
+    if "type" not in geojson:
         return None
-        
+
     # Additional validation to ensure we're dealing with a parcel geometry
     # rather than a commune geometry by checking expected properties
     try:
@@ -110,18 +110,18 @@ def clear_cache():
     global _commune_selector, _section_selector, _parcelle_selector
     try:
         # Try to call clear_cache method if it exists on selectors
-        if hasattr(_commune_selector, 'clear_cache'):
+        if hasattr(_commune_selector, "clear_cache"):
             _commune_selector.clear_cache()
-        if hasattr(_section_selector, 'clear_cache'):
+        if hasattr(_section_selector, "clear_cache"):
             _section_selector.clear_cache()
-        if hasattr(_parcelle_selector, 'clear_cache'):
+        if hasattr(_parcelle_selector, "clear_cache"):
             _parcelle_selector.clear_cache()
     except Exception:
         # In case of failure, recreate selectors to clear their cache
         try:
-            from geoselector.core.selector import SelectorFactory
-            from geoselector.core.entities import Commune, Section, Parcelle
-            
+            from geoselector.core.entities import Commune, Parcelle, Section  # type: ignore
+            from geoselector.core.selector import SelectorFactory  # type: ignore
+
             # Recreate selectors to clear their cache
             _commune_selector = SelectorFactory.create_selector(Commune)
             _section_selector = SelectorFactory.create_selector(Section)

@@ -75,9 +75,7 @@ def export_results_to_csv(
 
 def _load_template() -> QDomDocument:
     """Load the report_page.qpt template as a QDomDocument."""
-    template_path = os.path.join(
-        os.path.dirname(__file__), os.pardir, "resources", "report_page.qpt"
-    )
+    template_path = os.path.join(os.path.dirname(__file__), os.pardir, "resources", "report_page.qpt")
     doc = QDomDocument()
     with open(template_path, encoding="utf-8") as f:
         doc.setContent(f.read())
@@ -159,9 +157,7 @@ def export_results_to_pdf(
     # Page 1: overview with all result layers
     if progress_callback:
         progress_callback(0, total_pages, commune_name)
-    overview_layout = _make_page_layout(
-        project, template_doc, commune_name, bbox, list(result_layers) + [basemap]
-    )
+    overview_layout = _make_page_layout(project, template_doc, commune_name, bbox, list(result_layers) + [basemap])
     overview_section = QgsReportSectionLayout(report)
     overview_section.setBody(overview_layout)
     overview_section.setBodyEnabled(True)
@@ -172,9 +168,7 @@ def export_results_to_pdf(
         layer_name = layer.name().removesuffix(" — résultat")
         if progress_callback:
             progress_callback(i + 1, total_pages, layer_name)
-        page_layout = _make_page_layout(
-            project, template_doc, layer_name, bbox, [layer, basemap]
-        )
+        page_layout = _make_page_layout(project, template_doc, layer_name, bbox, [layer, basemap])
         section = QgsReportSectionLayout(report)
         section.setBody(page_layout)
         section.setBodyEnabled(True)
@@ -183,9 +177,7 @@ def export_results_to_pdf(
     # Export
     settings = QgsLayoutExporter.PdfExportSettings()
     # exportToPdf returns tuple[ExportResult, str] at runtime but qgis-stubs types it as ExportResult
-    result, error = QgsLayoutExporter.exportToPdf(
-        report, output_path, settings
-    )  # pyright: ignore[reportGeneralTypeIssues]
+    result, error = QgsLayoutExporter.exportToPdf(report, output_path, settings)  # pyright: ignore[reportGeneralTypeIssues]
 
     # Clean up temporary basemap
     project.removeMapLayer(basemap.id())

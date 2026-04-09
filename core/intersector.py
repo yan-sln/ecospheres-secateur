@@ -59,17 +59,17 @@ def intersect_parcelle(
     # Reproject parcel geometry to layer CRS
     parcelle_crs = QgsCoordinateReferenceSystem("EPSG:4326")
     results = []
-    
+
     # Get project instance early to avoid repeated calls
     project = QgsProject.instance()
     if project is None:
         return results
-    
+
     # Get layer tree root early
     root = project.layerTreeRoot()
     if root is None:
         return results
-    
+
     for i, layer in enumerate(layers):
         if progress_callback:
             progress_callback(i, len(layers), layer.name())
@@ -77,27 +77,25 @@ def intersect_parcelle(
         # Validate layer before proceeding
         if layer is None:
             continue
-            
+
         # Reproject parcel geometry to layer CRS
         layer_crs = layer.crs()
         if layer_crs is None:
             continue
-            
+
         local_geom = None
-        
+
         # Try to transform geometry to layer CRS
         try:
             if layer_crs != parcelle_crs:
-                transform = QgsCoordinateTransform(
-                    parcelle_crs, layer_crs, project
-                )
+                transform = QgsCoordinateTransform(parcelle_crs, layer_crs, project)
                 local_geom = QgsGeometry(parcelle_geom)
                 if not local_geom.transform(transform):
                     # If transformation fails, fall back to original geometry
                     local_geom = parcelle_geom
             else:
                 local_geom = parcelle_geom
-        except Exception as e:
+        except Exception:
             # If any error occurs during transformation, use original geometry
             # Log the error for debugging but continue processing
             local_geom = parcelle_geom
@@ -115,11 +113,11 @@ def intersect_parcelle(
             "memory",
         )
         mem_provider = mem_layer.dataProvider()
-        
+
         # Validate memory layer provider
         if mem_provider is None:
             continue
-            
+
         mem_provider.addAttributes(layer.fields().toList())
         mem_layer.updateFields()
 
@@ -137,7 +135,7 @@ def intersect_parcelle(
                     new_feat.setGeometry(feat.geometry())
                     new_feat.setAttributes(feat.attributes())
                     matching.append(new_feat)
-        except Exception as e:
+        except Exception:
             # If there's an error getting features, skip this layer
             continue
 
@@ -157,7 +155,7 @@ def add_results_to_project(result_layers: list[QgsVectorLayer]):
     project = QgsProject.instance()
     if project is None:
         return
-    
+
     root = project.layerTreeRoot()
     if root is None:
         return
