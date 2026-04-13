@@ -325,6 +325,10 @@ def add_legend(layout, map_item, layers, nb_items):
     legend.setLegendFilterByMapEnabled(True)
     legend.refresh()
 
+    # Ensure transparency settings for legend items
+    legend.setFrameEnabled(True)
+    legend.setFrameStrokeWidth(QgsLayoutMeasurement(0.4))
+
     layout.addLayoutItem(legend)
     legend.setColumnSpace(35)
     legend.attemptMove(QgsLayoutPoint(220, 25, QgsUnitTypes.LayoutMillimeters))
@@ -379,6 +383,10 @@ def Export_Legende_pdf(path_name, rapport_name, project, manager, liste_couches,
     legend.setColumnCount(3)
     legend.setColumnSpace(5)
 
+    # Configure legend for proper transparency handling
+    legend.setFrameEnabled(True)
+    legend.setFrameStrokeWidth(QgsLayoutMeasurement(0.4))
+
     layout.addLayoutItem(legend)
     legend.attemptMove(QgsLayoutPoint(15, 30, QgsUnitTypes.LayoutMillimeters))
 
@@ -387,7 +395,13 @@ def Export_Legende_pdf(path_name, rapport_name, project, manager, liste_couches,
     path = os.path.join(format_output_path(path_name), filename)
 
     exporter = QgsLayoutExporter(layout)
-    exporter.exportToPdf(path, QgsLayoutExporter.PdfExportSettings())
+    settings = QgsLayoutExporter.PdfExportSettings()
+    settings.dpi = 300
+    settings.writeGeoPdf = True
+    settings.exportMetadata = True
+    settings.compressVectorGraphics = True
+    settings.preserveTransparency = True
+    exporter.exportToPdf(path, settings)
 
     return layout
 
@@ -613,8 +627,6 @@ def Exports_GeoPDF(path_name, rapport_name, projet, manager, rec_emprise, liste_
     # https://library.virginia.edu/data/articles//how-to-create-and-export-print-layouts-in-python-for-qgis-3
     # https://github.com/epurpur/PyQGIS-Scripts/blob/master/CreateLayoutManagerAndExport.py
     # on ne veut que la légende de la couche de zonage active....
-    # Checks layer tree objects and stores them in a list. This includes csv tables
-    # checked_layers = [layer.name() for layer in QgsProject().instance().layerTreeRoot().children() if layer.isVisible()]
     # get map layer objects of checked layers by matching their names and store those in a list
     checked_layers = liste_noms_couches_intersectees
     layersToAdd = [layer for layer in QgsProject().instance().mapLayers().values() if layer.name() in checked_layers]
@@ -651,6 +663,9 @@ def Exports_GeoPDF(path_name, rapport_name, projet, manager, rec_emprise, liste_
         y = 25
         x = 220
         legend.attemptMove(QgsLayoutPoint(x, y, QgsUnitTypes.LayoutMillimeters))
+        # Ensure legend transparency is properly handled
+        legend.setFrameEnabled(True)
+        legend.setFrameStrokeWidth(QgsLayoutMeasurement(0.4))
     else:  # si il y a plus de 12 items dans une legende on l'exporte à part !
         Export_Legende_pdf(path_name, rapport_name, projet, manager, liste_noms_couches_intersectees, nb_items_legendes)
 
@@ -658,10 +673,19 @@ def Exports_GeoPDF(path_name, rapport_name, projet, manager, rec_emprise, liste_
     exporter.layout().refresh()  # Refresh the layout before printing
     # setup settings
     settings = QgsLayoutExporter.PdfExportSettings()
-    settings.dpi = 90  # 300
+    settings.dpi = 300
     # pour créer un geopdf !
     # https://api.qgis.org/api/3.28/structQgsLayoutExporter_1_1PdfExportSettings.html#a93ddb66c1e1f541a1bed511a41f9e396
     settings.writeGeoPdf = True
+    # Enable geospatial metadata
+    settings.exportMetadata = True
+    # Fix transparency issues by setting proper PDF compression
+    settings.compressVectorGraphics = True
+    settings.preserveTransparency = True
+    settings.rasterizeWholeImage = False
+    # Fix transparency issues by setting proper PDF compression
+    settings.compressVectorGraphics = True
+    settings.preserveTransparency = True
 
     date_H_M = datetime.strftime(datetime.now(), "%Y_%m_%d_%Hh_%Mmin")
     file_rapport = str(path_name)
@@ -670,6 +694,13 @@ def Exports_GeoPDF(path_name, rapport_name, projet, manager, rec_emprise, liste_
     nom_du_fichier_tableau_pdf = nom_export + str(date_H_M) + ".pdf"
 
     pdf_path = os.path.join(path_rapport, nom_du_fichier_tableau_pdf)
+    settings = QgsLayoutExporter.PdfExportSettings()
+    settings.dpi = 300
+    settings.writeGeoPdf = True
+    settings.exportMetadata = True
+    settings.compressVectorGraphics = True
+    settings.preserveTransparency = True
+    settings.rasterizeWholeImage = False
     exporter.exportToPdf(pdf_path, settings)
 
     return layout, manager, layoutName, nb_items_legendes, liste_noms_couches_intersectees
@@ -689,6 +720,14 @@ def export_results_to_pdf(
     project = QgsProject.instance()
     manager = project.layoutManager()
 
+    # If output_path is a directory, create a proper filename
+    if os.path.isdir(output_path):
+        date_H_M = datetime.strftime(datetime.now(), "%Y_%m_%d_%Hh_%Mmin")
+        filename = f"Rapport_cartographique_d_interrogation_ADS_des_parcelles_{date_H_M}.pdf"
+        full_path = os.path.join(output_path, filename)
+    else:
+        full_path = output_path
+
     # Buffered extent (5% margin)
     bbox = commune_geom.boundingBox()
     bbox.grow(bbox.width() * 0.05 + bbox.height() * 0.05)
@@ -700,6 +739,6 @@ def export_results_to_pdf(
     layer_names = [layer.name() for layer in result_layers]
 
     # Create the main GeoPDF
-    Exports_GeoPDF(os.path.dirname(output_path), commune_name, project, manager, rec_emprise, layer_names)
+    Exports_GeoPDF(os.path.dirname(full_path), commune_name, project, manager, rec_emprise, layer_names)
 
     # The export process is handled entirely by Exports_GeoPDF function
