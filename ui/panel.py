@@ -338,14 +338,8 @@ class SecateurPanel(QDockWidget):
     def _on_export_pdf(self):
         if not self._result_layers:
             return
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Exporter le rapport PDF",
-            "",
-            "PDF (*.pdf)",
-            options=QFileDialog.Options(),
-        )
-        if not path:
+        folder = QFileDialog.getExistingDirectory(self, "Dossier d'export PDF")
+        if not folder:
             return
         try:
             total = 1 + len(self._result_layers)
@@ -362,10 +356,10 @@ class SecateurPanel(QDockWidget):
                 self._result_layers,
                 self._commune_name or "",
                 self._parcel_geom,
-                path,
+                folder,
                 progress_callback=progress,
             )
-            self._finish_progress(f"Export PDF : {path}")
+            self._finish_progress(f"Export PDF : fichiers dans {folder}")
         except Exception as e:
             self._finish_progress(f"Erreur export PDF : {e}")
 
