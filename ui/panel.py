@@ -5,10 +5,10 @@ import sys
 
 from qgis.core import (
     QgsLayerTreeGroup,
-    QgsProject,
     QgsPalLayerSettings,
-    QgsTextFormat,
+    QgsProject,
     QgsTextBufferSettings,
+    QgsTextFormat,
     QgsVectorLayerSimpleLabeling,
 )  # noqa: UP035
 from qgis.PyQt.QtCore import QStringListModel, Qt, QTimer  # noqa: UP035
@@ -246,11 +246,10 @@ class CadragePanel(QDockWidget):
         # Create a reusable symbol for parcel outlines
         from PyQt5.QtGui import QColor
         from qgis.core import (
-            QgsSymbol,
             QgsSimpleLineSymbolLayer,
             QgsSingleSymbolRenderer,
+            QgsSymbol,
             QgsWkbTypes,
-            QgsPalLayerSettings,
         )
 
         parcel_symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.PolygonGeometry)
