@@ -119,12 +119,13 @@ class CadragePanel(QDockWidget):
         if len(text) < 2:
             return
         self._communes = search_communes(text)
+        # Sort the commune objects themselves by name (case insensitive)
+        self._communes.sort(key=lambda c: getattr(c, "name", "").lower())
         display = []
         for c in self._communes:
             name = getattr(c, "name", "")
             code = getattr(c, "code", "")
             display.append(f"{name} ({code})")
-        display.sort(key=str.lower)
         self._completer_model.setStringList(display)
         self._completer.complete()
 
@@ -161,7 +162,8 @@ class CadragePanel(QDockWidget):
         for s in self._sections:
             # Show the section identifier ("section") in the UI
             display.append(str(s.section))
-        display.sort(key=str.lower)
+        # Sort the section objects themselves by section identifier (case insensitive)
+        self._sections.sort(key=lambda s: getattr(s, "section", "").lower())
         self.section_combo.blockSignals(True)
         self.section_combo.clear()
         self.section_combo.addItems(display)
