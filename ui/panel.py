@@ -235,6 +235,27 @@ class CadragePanel(QDockWidget):
         total_parcelles = len(self._parcelles)
         self._start_progress(total_parcelles)
 
+        # Create a reusable symbol for parcel outlines
+        from PyQt5.QtGui import QColor
+        from qgis.core import (
+            QgsSymbol,
+            QgsSimpleLineSymbolLayer,
+            QgsSingleSymbolRenderer,
+            QgsWkbTypes,
+        )
+
+        parcel_symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.PolygonGeometry)
+        parcel_symbol.deleteSymbolLayer(0)  # Remove default fill layer
+
+        # Create a line symbol layer with gray color and reasonable width
+        line_layer = QgsSimpleLineSymbolLayer()
+        line_layer.setWidth(.5)  # Line width
+        line_layer.setColor(QColor(199, 199, 199))  # Gray color
+
+        # Add the line layer to the symbol
+        parcel_symbol.appendSymbolLayer(line_layer)
+        parcel_renderer = QgsSingleSymbolRenderer(parcel_symbol)
+
         for i, parcel_obj in enumerate(self._parcelles):
             try:
                 # Fetch geometry for this parcel
@@ -300,6 +321,9 @@ class CadragePanel(QDockWidget):
 
                     # Add the feature to the layer
                     if provider.addFeature(feature):
+                        # Apply the pre-created symbol to the layer
+                        layer.setRenderer(parcel_renderer)
+
                         successful_layers.append(layer)
                         self._update_progress(i, total_parcelles, f"Parcelle {parcel_num} : ajoutée")
                     else:
