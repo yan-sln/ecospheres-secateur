@@ -623,10 +623,10 @@ class CadragePanel(QDockWidget):
                     if not section_group and commune_group:
                         section_group = commune_group.addGroup(section_group_name)
 
-                    # Move all layers to the commune group
-                    if commune_group:
+                    # Move all layers to the section group
+                    if section_group:
                         for layer in layers:
-                            commune_group.addLayer(layer)
+                            section_group.addLayer(layer)
         except Exception:
             # Silently ignore errors in grouping to prevent breaking the main functionality
             pass
