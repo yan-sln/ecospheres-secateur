@@ -7,8 +7,11 @@ communes.
 """
 
 import json
+import logging
 
 from qgis.core import QgsGeometry, QgsJsonUtils
+
+logger = logging.getLogger(__name__)
 
 # Attempt to import geoselector; if unavailable, provide stub selectors.
 try:
@@ -80,21 +83,21 @@ def list_parcelles(commune_code: str, section_code: str) -> list[Parcelle]:
     return raw_results
 
 
-def fetch_parcel_geometry(parcelle: Parcelle) -> QgsGeometry | None:
-    """Fetch the geometry of a parcel and return it as a ``QgsGeometry``."""
-    # Ensure the parcel has its service set if it's not already set
-    # This handles cases where a parcel was created outside the normal selector flow
-    if parcelle._service is None:
+def fetch_entity_geometry(entity) -> QgsGeometry | None:
+    """Fetch the geometry of an entity and return it as a ``QgsGeometry``."""
+    # Ensure the entity has its service set if it's not already set
+    # This handles cases where an entity was created outside the normal selector flow
+    if entity._service is None:
         # Set a simple fallback - we'll try to make sure the entity can at least
         # fetch geometry even without service by using force=True if needed
         pass
 
-    geojson = parcelle.get_geometry()
+    # Call the entity's get_geometry method which handles service integration properly
+    geojson = entity.get_geometry()
     if not geojson:
         return None
 
-    # Validate that the returned geometry actually corresponds to a parcel
-    # Check if the geometry is valid and has the expected structure
+    # Validate that the returned geometry is valid and has the expected structure
     if not isinstance(geojson, dict):
         return None
 
@@ -102,8 +105,7 @@ def fetch_parcel_geometry(parcelle: Parcelle) -> QgsGeometry | None:
     if "type" not in geojson:
         return None
 
-    # Additional validation to ensure we're dealing with a parcel geometry
-    # rather than a commune geometry by checking expected properties
+    # Additional validation to ensure we're dealing with a valid geometry
     try:
         feature_collection = json.dumps(
             {

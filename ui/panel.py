@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + "/..")
 
 from core.entities_selector import (
     clear_cache,
-    fetch_parcel_geometry,
+    fetch_entity_geometry,
     list_parcelles,
     list_sections,
     search_communes,
@@ -88,9 +88,16 @@ class CadragePanel(QDockWidget):
 
         # Buttons
         btn_row = QHBoxLayout()
-        self.run_button = QPushButton("Interroger")
+
+        self.show_sections_button = QPushButton("Afficher les sections")
+        self.show_sections_button.setEnabled(False)
+        self.show_sections_button.clicked.connect(self._on_show_sections)
+        btn_row.addWidget(self.show_sections_button)
+        self.run_button = QPushButton("Afficher les parcelles")
+
+        self.run_button = QPushButton("Afficher les parcelles")
         self.run_button.setEnabled(False)
-        self.run_button.clicked.connect(self._on_run)
+        self.run_button.clicked.connect(self._on_show_parcels)
         btn_row.addWidget(self.run_button)
 
         self.clear_cache_button = QPushButton("Vider le cache")
@@ -183,6 +190,8 @@ class CadragePanel(QDockWidget):
         self.section_combo.setEnabled(bool(display))
         self.section_combo.blockSignals(False)
         self.section_combo.setCurrentIndex(-1)
+        # Enable the show sections button when sections are loaded
+        self.show_sections_button.setEnabled(bool(display))
 
     def _on_section_selected(self, index):
         """Handle user selection of a section."""
@@ -196,6 +205,181 @@ class CadragePanel(QDockWidget):
         self.run_button.setEnabled(True)
         # Load parcels for this commune and section
         self._load_parcelles()
+
+    def _on_show_sections(self):
+        if not self._selected_code:
+            return
+
+        self.show_sections_button.setEnabled(False)
+        self.status_label.setText("Récupération des géométries des sections…")
+        self._force_repaint()
+
+        # Get all sections for the selected commune
+        if not self._sections:
+            self.status_label.setText("Erreur : aucune section disponible.")
+            self.show_sections_button.setEnabled(True)
+            return
+
+        # Process all sections
+        successful_layers = []
+        failed_count = 0
+
+        total_sections = len(self._sections)
+        self._start_progress(total_sections)
+
+        # Create a reusable symbol for section outlines
+        from PyQt5.QtGui import QColor
+        from qgis.core import (
+            QgsSimpleLineSymbolLayer,
+            QgsSingleSymbolRenderer,
+            QgsSymbol,
+            QgsWkbTypes,
+        )
+
+        section_symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.PolygonGeometry)
+        section_symbol.deleteSymbolLayer(0)  # Remove default fill layer
+
+        # Create a line symbol layer with gray color and reasonable width
+        line_layer = QgsSimpleLineSymbolLayer()
+        line_layer.setWidth(0.26)  # Line width
+        line_layer.setColor(QColor(199, 199, 199))  # Gray color
+
+        # Add the line layer to the symbol
+        section_symbol.appendSymbolLayer(line_layer)
+        section_renderer = QgsSingleSymbolRenderer(section_symbol)
+
+        for i, section_obj in enumerate(self._sections):
+            try:
+                # Fetch geometry for this section
+                geom = fetch_entity_geometry(section_obj)
+                if geom is None or geom.isEmpty():
+                    section_num = getattr(section_obj, "section", "inconnue")
+                    self.status_label.setText(
+                        f"Erreur : impossible de récupérer la géométrie de la section {section_num}."
+                    )
+                    failed_count += 1
+                    self._update_progress(
+                        i,
+                        total_sections,
+                        f"Section {getattr(section_obj, 'section', 'inconnue')} : erreur",
+                    )
+                    continue
+
+                # Create a memory layer for this section
+                from PyQt5.QtCore import QVariant
+                from qgis.core import (
+                    QgsFeature,
+                    QgsField,
+                    QgsProject,
+                    QgsVectorLayer,
+                )
+
+                # Create layer name using section number
+                section_num = getattr(section_obj, "section", "")
+                layer_name = (
+                    f"Section {section_num}"
+                    if section_num
+                    else f"Section {getattr(section_obj, 'feature_id', 'inconnue')}"
+                )
+
+                # Create a memory layer for the section
+                layer = QgsVectorLayer("Polygon?crs=EPSG:4326", layer_name, "memory")
+                provider = layer.dataProvider()
+
+                # Add fields for section information
+                if provider is not None:
+                    provider.addAttributes(
+                        [
+                            QgsField("commune_code", QVariant.String),
+                            QgsField("section", QVariant.String),
+                            QgsField("feature_id", QVariant.String),
+                        ]
+                    )
+                    layer.updateFields()
+
+                    # Create a feature with the geometry
+                    feature = QgsFeature()
+                    feature.setGeometry(geom)
+                    feature.setAttributes(
+                        [
+                            self._selected_code,
+                            getattr(section_obj, "section", ""),
+                            getattr(section_obj, "feature_id", ""),
+                        ]
+                    )
+
+                    # Add the feature to the layer
+                    if provider.addFeature(feature):
+                        # Apply the pre-created symbol to the layer
+                        layer.setRenderer(section_renderer)
+
+                        # Configure dynamic labeling for section number
+                        layer_settings = QgsPalLayerSettings()
+                        text_format = QgsTextFormat()
+
+                        text_format.setFont(QFont("Arial", 8))
+                        text_format.setSize(8)
+
+                        buffer_settings = QgsTextBufferSettings()
+                        buffer_settings.setEnabled(True)
+                        buffer_settings.setSize(1)
+                        buffer_settings.setColor(QColor("white"))
+
+                        text_format.setBuffer(buffer_settings)
+                        layer_settings.setFormat(text_format)
+
+                        layer_settings.fieldName = "section"
+                        layer_settings.placement = QgsPalLayerSettings.OverPoint
+
+                        layer_settings.enabled = True
+
+                        labeling = QgsVectorLayerSimpleLabeling(layer_settings)
+                        layer.setLabelsEnabled(True)
+                        layer.setLabeling(labeling)
+                        layer.triggerRepaint()
+
+                        successful_layers.append(layer)
+                        self._update_progress(i, total_sections, f"Section {section_num} : ajoutée")
+                    else:
+                        self.status_label.setText(
+                            f"Erreur : impossible d'ajouter la feature à la couche pour la section {section_num}."
+                        )
+                        failed_count += 1
+                        self._update_progress(i, total_sections, f"Section {section_num} : erreur")
+                else:
+                    self.status_label.setText(
+                        f"Erreur : impossible de créer le fournisseur de données pour la section {section_num}."
+                    )
+                    failed_count += 1
+                    self._update_progress(i, total_sections, f"Section {section_num} : erreur")
+
+            except Exception as e:
+                self.status_label.setText(
+                    f"Erreur lors du traitement de la section {getattr(section_obj, 'section', 'inconnue')} : {str(e)}"
+                )
+                failed_count += 1
+                self._update_progress(
+                    i,
+                    total_sections,
+                    f"Section {getattr(section_obj, 'section', 'inconnue')} : erreur",
+                )
+
+        # Group layers hierarchically by commune only
+        if successful_layers:
+            self._group_layers_by_commune_only(successful_layers)
+
+        # Add all layers to the project after grouping
+        project = QgsProject.instance()
+        if project and successful_layers:
+            for layer in successful_layers:
+                project.addMapLayer(layer, False)
+
+        # Finish progress and update status
+        self._finish_progress(
+            f"Traitement terminé : {len(successful_layers)} section(s) traitée(s), {failed_count} échec(s)."
+        )
+
+        self.show_sections_button.setEnabled(True)
 
     def _load_parcelles(self):
         """Load parcels for the selected commune and section."""
@@ -222,7 +406,7 @@ class CadragePanel(QDockWidget):
         display_num = parcel_num if parcel_num else str(parcel_id)
         self.status_label.setText(f"Parcelle sélectionnée : {display_num}")
 
-    def _on_run(self):
+    def _on_show_parcels(self):
         if not (self._selected_code and self._selected_section):
             return
 
@@ -267,7 +451,7 @@ class CadragePanel(QDockWidget):
         for i, parcel_obj in enumerate(self._parcelles):
             try:
                 # Fetch geometry for this parcel
-                geom = fetch_parcel_geometry(parcel_obj)
+                geom = fetch_entity_geometry(parcel_obj)
                 if geom is None or geom.isEmpty():
                     parcel_num = getattr(parcel_obj, "numero", "inconnue")
                     self.status_label.setText(
@@ -439,10 +623,42 @@ class CadragePanel(QDockWidget):
                     if not section_group and commune_group:
                         section_group = commune_group.addGroup(section_group_name)
 
-                    # Move all layers to the section group
-                    if section_group:
+                    # Move all layers to the commune group
+                    if commune_group:
                         for layer in layers:
-                            section_group.addLayer(layer)
+                            commune_group.addLayer(layer)
+        except Exception:
+            # Silently ignore errors in grouping to prevent breaking the main functionality
+            pass
+
+    def _group_layers_by_commune_only(self, layers):
+        """Group layers under a commune group only."""
+        try:
+            project = QgsProject.instance()
+            if project:
+                root = project.layerTreeRoot()
+                if root:
+                    # Get the commune info from the panel data
+                    commune_name = self._commune_name or "Commune inconnue"
+
+                    # Create commune group if it doesn't exist
+                    commune_group_name = commune_name
+                    commune_group = None
+
+                    # Look for existing commune group
+                    for child in root.children() if root.children() else []:
+                        if isinstance(child, QgsLayerTreeGroup) and child.name() == commune_group_name:
+                            commune_group = child
+                            break
+
+                    # Create commune group if it doesn't exist
+                    if not commune_group:
+                        commune_group = root.addGroup(commune_group_name)
+
+                    # Move all layers to the commune group
+                    if commune_group:
+                        for layer in layers:
+                            commune_group.addLayer(layer)
         except Exception:
             # Silently ignore errors in grouping to prevent breaking the main functionality
             pass
