@@ -127,6 +127,11 @@ class CadragePanel(QDockWidget):
             code = getattr(c, "code", "")
             display.append(f"{name} ({code})")
         self._completer_model.setStringList(display)
+        # Show message when no results found
+        if not self._communes:
+            self.status_label.setText(f'Aucune commune trouvée pour "{text}"')
+        else:
+            self.status_label.setText("")
         self._completer.complete()
 
     def _on_commune_selected(self, text):
