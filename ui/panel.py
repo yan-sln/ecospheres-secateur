@@ -137,13 +137,14 @@ class SecateurPanel(QDockWidget):
         if len(text) < 2:
             return
         self._communes = search_communes(text)
+        # Sort the commune objects themselves by name (case insensitive)
+        self._communes.sort(key=lambda c: getattr(c, "name", "").lower())
         display = []
         for c in self._communes:
             # Handle GeoEntity objects (no need for dict fallback anymore)
             name = getattr(c, "name", "")
             code = getattr(c, "code", "")
             display.append(f"{name} ({code})")
-        display.sort(key=str.lower)
         self._completer_model.setStringList(display)
         self._completer.complete()
 
@@ -180,13 +181,14 @@ class SecateurPanel(QDockWidget):
         if not self._selected_code:
             return
         self._sections = list_sections(self._selected_code)
+        # Sort the section objects themselves by section identifier (case insensitive)
+        self._sections.sort(key=lambda s: getattr(s, "section", "").lower())
         # Sections are now GeoEntity objects; use attribute access
         display = []
         for s in self._sections:
             # Handle GeoEntity objects (no need for dict fallback anymore)
             # Show the section identifier ("section") in the UI
             display.append(str(getattr(s, "section", "")))
-        display.sort(key=str.lower)
         self.section_combo.blockSignals(True)
         self.section_combo.clear()
         self.section_combo.addItems(display)
@@ -225,12 +227,13 @@ class SecateurPanel(QDockWidget):
             # Handle GeoEntity objects (no need for dict fallback anymore)
             if getattr(p, "section", None) == self._selected_section:
                 self._parcelles.append(p)
+        # Sort the parcel objects themselves by parcel number (case insensitive)
+        self._parcelles.sort(key=lambda p: getattr(p, "numero", "").lower())
         # Build display list using parcel number ("numero")
         display = []
         for p in self._parcelles:
             # Handle GeoEntity objects (no need for dict fallback anymore)
             display.append(str(getattr(p, "numero", "")))
-        display.sort(key=str.lower)
         self.parcelle_combo.blockSignals(True)
         self.parcelle_combo.clear()
         self.parcelle_combo.addItems(display)
