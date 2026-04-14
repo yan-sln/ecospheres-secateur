@@ -3,8 +3,16 @@ import os
 # Import using absolute path instead of relative
 import sys
 
-from qgis.core import QgsLayerTreeGroup, QgsProject  # noqa: UP035
+from qgis.core import (
+    QgsLayerTreeGroup,
+    QgsProject,
+    QgsPalLayerSettings,
+    QgsTextFormat,
+    QgsTextBufferSettings,
+    QgsVectorLayerSimpleLabeling,
+)  # noqa: UP035
 from qgis.PyQt.QtCore import QStringListModel, Qt, QTimer  # noqa: UP035
+from qgis.PyQt.QtGui import QFont  # noqa: UP035
 from qgis.PyQt.QtWidgets import (  # noqa: UP035
     QComboBox,
     QCompleter,
@@ -242,6 +250,7 @@ class CadragePanel(QDockWidget):
             QgsSimpleLineSymbolLayer,
             QgsSingleSymbolRenderer,
             QgsWkbTypes,
+            QgsPalLayerSettings,
         )
 
         parcel_symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.PolygonGeometry)
@@ -249,7 +258,7 @@ class CadragePanel(QDockWidget):
 
         # Create a line symbol layer with gray color and reasonable width
         line_layer = QgsSimpleLineSymbolLayer()
-        line_layer.setWidth(.5)  # Line width
+        line_layer.setWidth(0.26)  # Line width
         line_layer.setColor(QColor(199, 199, 199))  # Gray color
 
         # Add the line layer to the symbol
@@ -271,7 +280,6 @@ class CadragePanel(QDockWidget):
                         total_parcelles,
                         f"Parcelle {getattr(parcel_obj, 'numero', 'inconnue')} : erreur",
                     )
-                    continue
                     continue
 
                 # Create a memory layer for this parcel
@@ -323,6 +331,31 @@ class CadragePanel(QDockWidget):
                     if provider.addFeature(feature):
                         # Apply the pre-created symbol to the layer
                         layer.setRenderer(parcel_renderer)
+
+                        # Configure dynamic labeling for parcel number
+                        layer_settings = QgsPalLayerSettings()
+                        text_format = QgsTextFormat()
+
+                        text_format.setFont(QFont("Arial", 8))
+                        text_format.setSize(8)
+
+                        buffer_settings = QgsTextBufferSettings()
+                        buffer_settings.setEnabled(True)
+                        buffer_settings.setSize(1)
+                        buffer_settings.setColor(QColor("white"))
+
+                        text_format.setBuffer(buffer_settings)
+                        layer_settings.setFormat(text_format)
+
+                        layer_settings.fieldName = "numero"
+                        layer_settings.placement = QgsPalLayerSettings.OverPoint
+
+                        layer_settings.enabled = True
+
+                        labeling = QgsVectorLayerSimpleLabeling(layer_settings)
+                        layer.setLabelsEnabled(True)
+                        layer.setLabeling(labeling)
+                        layer.triggerRepaint()
 
                         successful_layers.append(layer)
                         self._update_progress(i, total_parcelles, f"Parcelle {parcel_num} : ajoutée")
