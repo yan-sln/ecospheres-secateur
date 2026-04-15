@@ -93,7 +93,6 @@ class CadragePanel(QDockWidget):
         self.show_sections_button.setEnabled(False)
         self.show_sections_button.clicked.connect(self._on_show_sections)
         btn_row.addWidget(self.show_sections_button)
-        self.run_button = QPushButton("Afficher les parcelles")
 
         self.run_button = QPushButton("Afficher les parcelles")
         self.run_button.setEnabled(False)
@@ -192,6 +191,9 @@ class CadragePanel(QDockWidget):
         self.section_combo.setCurrentIndex(-1)
         # Enable the show sections button when sections are loaded
         self.show_sections_button.setEnabled(bool(display))
+        # Update button text with count
+        count = len(self._sections)
+        self.show_sections_button.setText(f"Afficher les sections ({count})")
 
     def _on_section_selected(self, index):
         """Handle user selection of a section."""
@@ -392,6 +394,9 @@ class CadragePanel(QDockWidget):
         for p in all_parcelles:
             if getattr(p, "section", None) == self._selected_section:
                 self._parcelles.append(p)
+        # Update button text with count
+        count = len(all_parcelles)
+        self.run_button.setText(f"Afficher les parcelles ({count})")
 
     def _on_parcel_selected(self, index):
         """Handle user selection of a parcel and enable the run button."""
