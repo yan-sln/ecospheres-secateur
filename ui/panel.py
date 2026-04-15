@@ -281,7 +281,6 @@ class CadragePanel(QDockWidget):
                 from qgis.core import (
                     QgsFeature,
                     QgsField,
-                    QgsProject,
                     QgsVectorLayer,
                 )
 
@@ -495,7 +494,6 @@ class CadragePanel(QDockWidget):
                 from qgis.core import (
                     QgsFeature,
                     QgsField,
-                    QgsProject,
                     QgsVectorLayer,
                 )
 
