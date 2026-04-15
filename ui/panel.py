@@ -177,13 +177,13 @@ class CadragePanel(QDockWidget):
         if not self._selected_code:
             return
         self._sections = list_sections(self._selected_code)
+        # Sort the section objects themselves by section identifier (case insensitive)
+        self._sections.sort(key=lambda s: getattr(s, "section", "").lower())
         # Sections are now GeoEntity objects; use attribute access
         display = []
         for s in self._sections:
             # Show the section identifier ("section") in the UI
             display.append(str(s.section))
-        # Sort the section objects themselves by section identifier (case insensitive)
-        self._sections.sort(key=lambda s: getattr(s, "section", "").lower())
         self.section_combo.blockSignals(True)
         self.section_combo.clear()
         self.section_combo.addItems(display)
@@ -364,9 +364,9 @@ class CadragePanel(QDockWidget):
                     f"Section {getattr(section_obj, 'section', 'inconnue')} : erreur",
                 )
 
-        # Group layers hierarchically by commune only
+        # Group layers hierarchically by commune and sections
         if successful_layers:
-            self._group_layers_by_commune_only(successful_layers)
+            self._group_layers_by_commune_and_sections(successful_layers)
 
         # Add all layers to the project after grouping
         project = QgsProject.instance()
@@ -631,8 +631,8 @@ class CadragePanel(QDockWidget):
             # Silently ignore errors in grouping to prevent breaking the main functionality
             pass
 
-    def _group_layers_by_commune_only(self, layers):
-        """Group layers under a commune group only."""
+    def _group_layers_by_commune_and_sections(self, layers):
+        """Group layers hierarchically by commune and sections."""
         try:
             project = QgsProject.instance()
             if project:
@@ -655,10 +655,25 @@ class CadragePanel(QDockWidget):
                     if not commune_group:
                         commune_group = root.addGroup(commune_group_name)
 
-                    # Move all layers to the commune group
+                    # Create "Sections" group inside commune group
+                    sections_group_name = "Sections"
+                    sections_group = None
+
+                    # Look for existing sections group
                     if commune_group:
+                        for child in commune_group.children() if commune_group.children() else []:
+                            if isinstance(child, QgsLayerTreeGroup) and child.name() == sections_group_name:
+                                sections_group = child
+                                break
+
+                    # Create sections group if it doesn't exist
+                    if not sections_group and commune_group:
+                        sections_group = commune_group.addGroup(sections_group_name)
+
+                    # Move all layers to the sections group
+                    if sections_group:
                         for layer in layers:
-                            commune_group.addLayer(layer)
+                            sections_group.addLayer(layer)
         except Exception:
             # Silently ignore errors in grouping to prevent breaking the main functionality
             pass
