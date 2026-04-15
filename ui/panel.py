@@ -221,12 +221,21 @@ class CadragePanel(QDockWidget):
             self.status_label.setText("Erreur : aucune section disponible.")
             self.show_sections_button.setEnabled(True)
             return
+        
+        missing = self._missing_section_layers()
+
+        if not missing:
+            self.status_label.setText("Toutes les sections sont déjà présentes.")
+            self.show_sections_button.setEnabled(True)
+            return
+
+        sections_to_process = missing
 
         # Process all sections
         successful_layers = []
         failed_count = 0
 
-        total_sections = len(self._sections)
+        total_sections = len(sections_to_process)
         self._start_progress(total_sections)
 
         # Create a reusable symbol for section outlines
@@ -250,7 +259,7 @@ class CadragePanel(QDockWidget):
         section_symbol.appendSymbolLayer(line_layer)
         section_renderer = QgsSingleSymbolRenderer(section_symbol)
 
-        for i, section_obj in enumerate(self._sections):
+        for i, section_obj in enumerate(sections_to_process):
             try:
                 # Fetch geometry for this section
                 geom = fetch_entity_geometry(section_obj)
@@ -425,11 +434,22 @@ class CadragePanel(QDockWidget):
             self.run_button.setEnabled(True)
             return
 
+        # Incremental filtre
+        missing = self._missing_parcel_layers()
+
+        if not missing:
+            self.status_label.setText("Toutes les parcelles sont déjà présentes.")
+            self.run_button.setEnabled(True)
+            return
+
+        # On ne traite QUE ce qui manque
+        parcelles_to_process = missing
+
         # Process all parcels in the section
         successful_layers = []
         failed_count = 0
 
-        total_parcelles = len(self._parcelles)
+        total_parcelles = len(parcelles_to_process)
         self._start_progress(total_parcelles)
 
         # Create a reusable symbol for parcel outlines
@@ -453,7 +473,7 @@ class CadragePanel(QDockWidget):
         parcel_symbol.appendSymbolLayer(line_layer)
         parcel_renderer = QgsSingleSymbolRenderer(parcel_symbol)
 
-        for i, parcel_obj in enumerate(self._parcelles):
+        for i, parcel_obj in enumerate(parcelles_to_process):
             try:
                 # Fetch geometry for this parcel
                 geom = fetch_entity_geometry(parcel_obj)
@@ -709,3 +729,84 @@ class CadragePanel(QDockWidget):
         from qgis.PyQt.QtWidgets import QApplication  # noqa: UP035
 
         QApplication.processEvents()
+
+    def _get_group_by_path(self, path):
+        """
+        path: list[str] → ex: ["Paris", "Sections"]
+        """
+        project = QgsProject.instance()
+        if not project:
+            return None
+
+        node = project.layerTreeRoot()
+        for name in path:
+            if not node:
+                return None
+
+            node = next(
+                (
+                    child
+                    for child in node.children()
+                    if isinstance(child, QgsLayerTreeGroup) and child.name() == name
+                ),
+                None,
+            )
+
+        return node
+    
+    def _missing_section_layers(self):
+        path = [self._commune_name or "Commune inconnue", "Sections"]
+        group = self._get_group_by_path(path)
+
+        if not group:
+            return self._sections  # tout manque
+
+        existing = {
+            child.name()
+            for child in group.children()
+            if not isinstance(child, QgsLayerTreeGroup)
+        }
+
+        missing = []
+        for s in self._sections:
+            section_num = getattr(s, "section", "")
+            name = (
+                f"Section {section_num}"
+                if section_num
+                else f"Section {getattr(s, 'feature_id', 'inconnue')}"
+            )
+
+            if name not in existing:
+                missing.append(s)
+
+        return missing
+    
+    def _missing_parcel_layers(self):
+        path = [
+            self._commune_name or "Commune inconnue",
+            f"Section {self._selected_section}",
+        ]
+        group = self._get_group_by_path(path)
+
+        if not group:
+            return self._parcelles
+
+        existing = {
+            child.name()
+            for child in group.children()
+            if not isinstance(child, QgsLayerTreeGroup)
+        }
+
+        missing = []
+        for p in self._parcelles:
+            num = getattr(p, "numero", "")
+            name = (
+                f"Parcelle {num}"
+                if num
+                else f"Parcelle {getattr(p, 'feature_id', 'inconnue')}"
+            )
+
+            if name not in existing:
+                missing.append(p)
+
+        return missing
