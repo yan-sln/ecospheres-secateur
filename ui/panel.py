@@ -175,7 +175,7 @@ class CadragePanel(QDockWidget):
         """Load sections for the currently selected commune and populate the combo box."""
         if not self._selected_code:
             return
-        self._sections = list_sections(self._selected_code)
+        self._sections = list(set(list_sections(self._selected_code))) #!!! Voir si gestion doublon à faire ici ou GeoSelector ?!
         # Sort the section objects themselves by section identifier (case insensitive)
         self._sections.sort(key=lambda s: getattr(s, "section", "").lower())
         # Sections are now GeoEntity objects; use attribute access
