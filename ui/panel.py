@@ -89,17 +89,17 @@ class CadreurPanel(QDockWidget):
         # Buttons
         btn_row = QHBoxLayout()
 
-        self.show_commune_button = QPushButton("Afficher la commune")
+        self.show_commune_button = QPushButton("Charger la commune")
         self.show_commune_button.setEnabled(False)
         self.show_commune_button.clicked.connect(self._on_show_commune)
         btn_row.addWidget(self.show_commune_button)
 
-        self.show_sections_button = QPushButton("Afficher les sections")
+        self.show_sections_button = QPushButton("Charger les sections")
         self.show_sections_button.setEnabled(False)
         self.show_sections_button.clicked.connect(self._on_show_sections)
         btn_row.addWidget(self.show_sections_button)
 
-        self.run_button = QPushButton("Afficher les parcelles")
+        self.run_button = QPushButton("Charger les parcelles")
         self.run_button.setEnabled(False)
         self.run_button.clicked.connect(self._on_show_parcels)
         btn_row.addWidget(self.run_button)
@@ -203,7 +203,7 @@ class CadreurPanel(QDockWidget):
         self.show_sections_button.setEnabled(bool(display))
         # Update button text with count
         count = len(self._sections)
-        self.show_sections_button.setText(f"Afficher les sections ({count})")
+        self.show_sections_button.setText(f"Charger les sections ({count})")
 
     def _on_section_selected(self, index):
         """Handle user selection of a section."""
@@ -493,7 +493,7 @@ class CadreurPanel(QDockWidget):
                 self._parcelles.append(p)
         # Update button text with count
         count = len(all_parcelles)
-        self.run_button.setText(f"Afficher les parcelles ({count})")
+        self.run_button.setText(f"Charger les parcelles ({count})")
 
     def _on_parcel_selected(self, index):
         """Handle user selection of a parcel and enable the run button."""
@@ -897,7 +897,9 @@ class CadreurPanel(QDockWidget):
             return [commune_obj]
         # Existing layer names under the group (ignore sub‑groups)
         existing = {child.name() for child in group.children() if not isinstance(child, QgsLayerTreeGroup)}
-        expected_name = f"Commune {self._commune_name}" if self._commune_name else f"Commune {self._selected_code}"
+        expected_name = (
+            f"{self._commune_name} ({self._selected_code})" if self._commune_name else f"{self._selected_code}"
+        )
         if expected_name in existing:
             return []
         return [commune_obj]
