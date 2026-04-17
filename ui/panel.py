@@ -121,6 +121,8 @@ class CadreurPanel(QDockWidget):
     def _on_text_changed(self, text):
         self._selected_code = None
         self.run_button.setEnabled(False)
+        # Reset commune button when the user clears or changes the search
+        self.show_commune_button.setEnabled(False)
         if len(text) >= 2:
             self._debounce_timer.start()
         else:
@@ -165,7 +167,8 @@ class CadreurPanel(QDockWidget):
                 self.section_combo.setEnabled(False)
                 self.section_combo.setCurrentIndex(-1)
                 self._parcelles = []
-                self.run_button.setEnabled(False)
+self.run_button.setEnabled(False)
+                self.show_commune_button.setEnabled(True)
                 self.status_label.setText(f"Commune sélectionnée : {self._commune_name} ({self._selected_code})")
                 # Load sections for this commune
                 self._load_sections()
@@ -175,7 +178,9 @@ class CadreurPanel(QDockWidget):
         """Load sections for the currently selected commune and populate the combo box."""
         if not self._selected_code:
             return
-        self._sections = list(set(list_sections(self._selected_code))) #!!! Voir si gestion doublon à faire ici ou GeoSelector ?!
+        self._sections = list(
+            set(list_sections(self._selected_code))
+        )  #!!! Voir si gestion doublon à faire ici ou GeoSelector ?!
         # Sort the section objects themselves by section identifier (case insensitive)
         self._sections.sort(key=lambda s: getattr(s, "section", "").lower())
         # Sections are now GeoEntity objects; use attribute access
@@ -221,7 +226,7 @@ class CadreurPanel(QDockWidget):
             self.status_label.setText("Erreur : aucune section disponible.")
             self.show_sections_button.setEnabled(True)
             return
-        
+
         missing = self._missing_section_layers()
 
         if not missing:
@@ -390,6 +395,81 @@ class CadreurPanel(QDockWidget):
         )
 
         self.show_sections_button.setEnabled(True)
+
+    def _on_show_commune(self):
+        """Retrieve and display the geometry of the selected commune.
+        The layer is added under a top‑level "Commune" group.
+        """
+        if not self._selected_code:
+            return
+        # Disable button while processing
+        self.show_commune_button.setEnabled(False)
+        self.status_label.setText("Récupération de la géométrie de la commune…")
+        self._force_repaint()
+
+        # Check if the commune layer already exists
+        missing = self._missing_commune_layers()
+        if not missing:
+            self.status_label.setText("La géométrie de la commune est déjà affichée.")
+            self.show_commune_button.setEnabled(True)
+            return
+
+        # Find the commune object corresponding to the selected code
+        commune_obj = None
+        for c in self._communes:
+            if getattr(c, "code", "") == self._selected_code:
+                commune_obj = c
+                break
+        if not commune_obj:
+            self.status_label.setText("Erreur : données de la commune introuvables.")
+            self.show_commune_button.setEnabled(True)
+            return
+
+        geom = fetch_entity_geometry(commune_obj)
+        if geom is None or geom.isEmpty():
+            self.status_label.setText("Erreur : impossible de récupérer la géométrie de la commune.")
+            self.show_commune_button.setEnabled(True)
+            return
+
+        # Create a memory layer for the commune
+        from PyQt5.QtCore import QVariant
+        from qgis.core import QgsVectorLayer, QgsFeature, QgsField
+        layer_name = f"Commune {self._commune_name}" if self._commune_name else f"Commune {self._selected_code}"
+        layer = QgsVectorLayer("Polygon?crs=EPSG:4326", layer_name, "memory")
+        provider = layer.dataProvider()
+        if provider is not None:
+            provider.addAttributes([
+                QgsField("commune_code", QVariant.String),
+                QgsField("nom", QVariant.String),
+            ])
+            layer.updateFields()
+            feature = QgsFeature()
+            feature.setGeometry(geom)
+            feature.setAttributes([self._selected_code, self._commune_name or ""])
+            provider.addFeature(feature)
+
+        # Symbol: transparent fill with gray outline
+        from PyQt5.QtGui import QColor
+        from qgis.core import QgsSimpleFillSymbolLayer, QgsSymbol, QgsSingleSymbolRenderer, QgsWkbTypes
+        commune_symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.PolygonGeometry)
+        # Remove default layer(s)
+        commune_symbol.deleteSymbolLayer(0)
+        fill_layer = QgsSimpleFillSymbolLayer()
+        fill_layer.setColor(QColor(255, 255, 255, 0))  # transparent fill
+        fill_layer.setStrokeColor(QColor(199, 199, 199))
+        fill_layer.setStrokeWidth(0.26)
+        commune_symbol.appendSymbolLayer(fill_layer)
+        renderer = QgsSingleSymbolRenderer(commune_symbol)
+        layer.setRenderer(renderer)
+
+        # Add layer to project and group
+        self._group_layers_by_commune([layer])
+        project = QgsProject.instance()
+        if project:
+            project.addMapLayer(layer, False)
+
+        self.status_label.setText("Géométrie de la commune affichée.")
+        self.show_commune_button.setEnabled(True)
 
     def _load_parcelles(self):
         """Load parcels for the selected commune and section."""
@@ -742,16 +822,12 @@ class CadreurPanel(QDockWidget):
                 return None
 
             node = next(
-                (
-                    child
-                    for child in node.children()
-                    if isinstance(child, QgsLayerTreeGroup) and child.name() == name
-                ),
+                (child for child in node.children() if isinstance(child, QgsLayerTreeGroup) and child.name() == name),
                 None,
             )
 
         return node
-    
+
     def _missing_section_layers(self):
         path = [self._commune_name or "Commune inconnue", "Sections"]
         group = self._get_group_by_path(path)
@@ -759,26 +835,18 @@ class CadreurPanel(QDockWidget):
         if not group:
             return self._sections  # tout manque
 
-        existing = {
-            child.name()
-            for child in group.children()
-            if not isinstance(child, QgsLayerTreeGroup)
-        }
+        existing = {child.name() for child in group.children() if not isinstance(child, QgsLayerTreeGroup)}
 
         missing = []
         for s in self._sections:
             section_num = getattr(s, "section", "")
-            name = (
-                f"Section {section_num}"
-                if section_num
-                else f"Section {getattr(s, 'feature_id', 'inconnue')}"
-            )
+            name = f"Section {section_num}" if section_num else f"Section {getattr(s, 'feature_id', 'inconnue')}"
 
             if name not in existing:
                 missing.append(s)
 
         return missing
-    
+
     def _missing_parcel_layers(self):
         path = [
             self._commune_name or "Commune inconnue",
@@ -789,22 +857,57 @@ class CadreurPanel(QDockWidget):
         if not group:
             return self._parcelles
 
-        existing = {
-            child.name()
-            for child in group.children()
-            if not isinstance(child, QgsLayerTreeGroup)
-        }
+        existing = {child.name() for child in group.children() if not isinstance(child, QgsLayerTreeGroup)}
 
         missing = []
         for p in self._parcelles:
             num = getattr(p, "numero", "")
-            name = (
-                f"Parcelle {num}"
-                if num
-                else f"Parcelle {getattr(p, 'feature_id', 'inconnue')}"
-            )
+            name = f"Parcelle {num}" if num else f"Parcelle {getattr(p, 'feature_id', 'inconnue')}"
 
             if name not in existing:
                 missing.append(p)
 
         return missing
+
+    def _missing_commune_layers(self):
+        """Return list of commune objects whose geometry layer is missing.
+        The commune layer is stored under a top‑level group named "Commune".
+        """
+        path = ["Commune"]
+        group = self._get_group_by_path(path)
+        if not group:
+            # No group → no commune layer present yet
+            return [self._selected_code] if self._selected_code else []
+        # Existing layer names under the group
+        existing = {child.name() for child in group.children() if not isinstance(child, QgsLayerTreeGroup)}
+        # Expected layer name for the selected commune
+        expected_name = f"Commune {self._commune_name}" if self._commune_name else f"Commune {self._selected_code}"
+        if expected_name in existing:
+            return []
+        # Return a placeholder (the commune object) – we will reuse the selected commune data
+        return [self._selected_code]
+
+    def _group_layers_by_commune(self, layers):
+        """Group given layers under a top‑level "Commune" group.
+        If the group does not exist, it is created.
+        """
+        try:
+            project = QgsProject.instance()
+            if not project:
+                return
+            root = project.layerTreeRoot()
+            if not root:
+                return
+            # Ensure top‑level group "Commune"
+            commune_group = None
+            for child in root.children() if root.children() else []:
+                if isinstance(child, QgsLayerTreeGroup) and child.name() == "Commune":
+                    commune_group = child
+                    break
+            if not commune_group:
+                commune_group = root.addGroup("Commune")
+            # Add each layer to the group
+            for layer in layers:
+                commune_group.addLayer(layer)
+        except Exception:
+            pass
