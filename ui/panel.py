@@ -3,6 +3,12 @@ import os
 # Import using absolute path instead of relative
 import sys
 
+import functools
+import logging
+from typing import Any, List
+
+from geoselector.core.exceptions import ApiError  # type: ignore
+
 from qgis.core import (
     QgsLayerTreeGroup,
     QgsPalLayerSettings,
@@ -37,6 +43,38 @@ from core.entities_selector import (
 )
 
 
+def handle_api_error(fallback: Any = None, update_ui: bool = True):
+    """Catch ApiError, store state, optionally update UI, and return fallback."""
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            # Reset per-call state
+            self._last_api_error_occurred = False
+            self._last_api_error_retryable = False
+            try:
+                return func(self, *args, **kwargs)
+            except ApiError as e:
+                self._last_api_error_occurred = True
+                self._last_api_error_retryable = getattr(e, "retryable", False)
+                logging.exception(
+                    "API error in %s args=%s kwargs=%s",
+                    func.__name__,
+                    args,
+                    kwargs,
+                )
+                if update_ui:
+                    try:
+                        self.status_label.setText(e.to_user_friendly_message())
+                    except Exception:
+                        self.status_label.setText("Une erreur API est survenue.")
+                return fallback
+
+        return wrapper
+
+    return decorator
+
+
 class CadreurPanel(QDockWidget):
     def __init__(self, iface, parent=None):
         super().__init__("Ecosphères Cadreur", iface.mainWindow())
@@ -51,6 +89,8 @@ class CadreurPanel(QDockWidget):
         self._commune_name = None
         self._parcel_geom = None
         self._debounce_timer = QTimer(self)
+        self._last_api_error_occurred: bool = False
+        self._last_api_error_retryable: bool = False
         self._debounce_timer.setSingleShot(True)
         self._debounce_timer.setInterval(300)
         self._debounce_timer.timeout.connect(self._do_search)
@@ -58,6 +98,8 @@ class CadreurPanel(QDockWidget):
         self._build_ui()
 
     def _build_ui(self):
+        # UI building as before
+
         container = QWidget()
         layout = QVBoxLayout(container)
 
@@ -123,6 +165,22 @@ class CadreurPanel(QDockWidget):
         layout.addStretch()
         self.setWidget(container)
 
+    @handle_api_error(fallback=[], update_ui=True)
+    def _search_communes(self, text: str) -> List:
+        return search_communes(text)
+
+    @handle_api_error(fallback=[], update_ui=True)
+    def _fetch_sections(self, code: str) -> List:
+        return list_sections(code)
+
+    @handle_api_error(fallback=[], update_ui=True)
+    def _fetch_parcelles(self, code: str, section: str) -> List:
+        return list_parcelles(code, section)
+
+    @handle_api_error(fallback=None, update_ui=False)
+    def _get_geometry(self, entity):
+        return fetch_entity_geometry(entity)
+
     def _on_text_changed(self, text):
         self._selected_code = None
         self.run_button.setEnabled(False)
@@ -139,7 +197,9 @@ class CadreurPanel(QDockWidget):
         text = self.search_input.text().strip()
         if len(text) < 2:
             return
-        self._communes = search_communes(text)
+        self._communes = self._search_communes(text)
+        if self._last_api_error_occurred:
+            return
         # Sort the commune objects themselves by name (case insensitive)
         self._communes.sort(key=lambda c: getattr(c, "name", "").lower())
         display = []
@@ -183,9 +243,17 @@ class CadreurPanel(QDockWidget):
         """Load sections for the currently selected commune and populate the combo box."""
         if not self._selected_code:
             return
-        self._sections = list(
-            set(list_sections(self._selected_code))
-        )  #!!! Voir si gestion doublon à faire ici ou GeoSelector ?!
+        raw = self._fetch_sections(self._selected_code)
+        if self._last_api_error_occurred:
+            self._sections = []
+            return
+        # Deterministic deduplication using section identifier
+        unique = {}
+        for s in raw:
+            key = getattr(s, "section", None)
+            if key not in unique:
+                unique[key] = s
+        self._sections = list(unique.values())
         # Sort the section objects themselves by section identifier (case insensitive)
         self._sections.sort(key=lambda s: getattr(s, "section", "").lower())
         # Sections are now GeoEntity objects; use attribute access
@@ -269,10 +337,18 @@ class CadreurPanel(QDockWidget):
         section_symbol.appendSymbolLayer(line_layer)
         section_renderer = QgsSingleSymbolRenderer(section_symbol)
 
+        had_error = False
         for i, section_obj in enumerate(sections_to_process):
             try:
                 # Fetch geometry for this section
-                geom = fetch_entity_geometry(section_obj)
+                geom = self._get_geometry(section_obj)
+                if self._last_api_error_occurred:
+                    had_error = True
+                    section_num = getattr(section_obj, "section", "inconnue")
+                    # API error for this section; will be reported after loop
+                    failed_count += 1
+                    self._update_progress(i, total_sections, f"Section {section_num} : erreur")
+                    continue
                 if geom is None or geom.isEmpty():
                     section_num = getattr(section_obj, "section", "inconnue")
                     self.status_label.setText(
@@ -395,9 +471,10 @@ class CadreurPanel(QDockWidget):
                 project.addMapLayer(layer, False)
 
         # Finish progress and update status
-        self._finish_progress(
-            f"Traitement terminé : {len(successful_layers)} section(s) traitée(s), {failed_count} échec(s)."
-        )
+        if failed_count > 0:
+            self._finish_progress(f"{len(successful_layers)} succès, {failed_count} erreurs")
+        else:
+            self._finish_progress("Succès complet")
 
         self.show_sections_button.setEnabled(True)
 
@@ -430,7 +507,10 @@ class CadreurPanel(QDockWidget):
             self.show_commune_button.setEnabled(True)
             return
 
-        geom = fetch_entity_geometry(commune_obj)
+        geom = self._get_geometry(commune_obj)
+        if self._last_api_error_occurred:
+            self.show_commune_button.setEnabled(True)
+            return
         if geom is None or geom.isEmpty():
             self.status_label.setText("Erreur : impossible de récupérer la géométrie de la commune.")
             self.show_commune_button.setEnabled(True)
@@ -485,7 +565,10 @@ class CadreurPanel(QDockWidget):
         if not (self._selected_code and self._selected_section):
             return
         # Retrieve all parcels for the commune and section
-        all_parcelles = list_parcelles(self._selected_code, self._selected_section)
+        all_parcelles = self._fetch_parcelles(self._selected_code, self._selected_section)
+        if self._last_api_error_occurred:
+            self._parcelles = []
+            return
         # Filter parcels to keep only those belonging to the selected section (safety net)
         self._parcelles = []
         for p in all_parcelles:
@@ -561,10 +644,18 @@ class CadreurPanel(QDockWidget):
         parcel_symbol.appendSymbolLayer(line_layer)
         parcel_renderer = QgsSingleSymbolRenderer(parcel_symbol)
 
+        had_error = False
         for i, parcel_obj in enumerate(parcelles_to_process):
             try:
                 # Fetch geometry for this parcel
-                geom = fetch_entity_geometry(parcel_obj)
+                geom = self._get_geometry(parcel_obj)
+                if self._last_api_error_occurred:
+                    had_error = True
+                    parcel_num = getattr(parcel_obj, "numero", "inconnue")
+                    self.status_label.setText(f"Erreur API pour la parcelle {parcel_num}")
+                    failed_count += 1
+                    self._update_progress(i, total_parcelles, f"Parcelle {parcel_num} : erreur")
+                    continue
                 if geom is None or geom.isEmpty():
                     parcel_num = getattr(parcel_obj, "numero", "inconnue")
                     self.status_label.setText(
@@ -689,9 +780,10 @@ class CadreurPanel(QDockWidget):
                 project.addMapLayer(layer, False)
 
         # Finish progress and update status
-        self._finish_progress(
-            f"Traitement terminé : {len(successful_layers)} parcelle(s) traitée(s), {failed_count} échec(s)."
-        )
+        if failed_count > 0:
+            self._finish_progress(f"{len(successful_layers)} succès, {failed_count} erreurs")
+        else:
+            self._finish_progress("Succès complet")
 
         self.run_button.setEnabled(True)
 
