@@ -1,14 +1,12 @@
+import functools
+import logging
 import os
 
 # Import using absolute path instead of relative
 import sys
-
-import functools
-import logging
-from typing import Any, List
+from typing import Any
 
 from geoselector.core.exceptions import ApiError  # type: ignore
-
 from qgis.core import (
     QgsLayerTreeGroup,
     QgsPalLayerSettings,
@@ -161,15 +159,15 @@ class CadreurPanel(QDockWidget):
         self.setWidget(container)
 
     @handle_api_error(fallback=[], update_ui=True)
-    def _search_communes(self, text: str) -> List:
+    def _search_communes(self, text: str) -> list:
         return search_communes(text)
 
     @handle_api_error(fallback=[], update_ui=True)
-    def _fetch_sections(self, code: str) -> List:
+    def _fetch_sections(self, code: str) -> list:
         return list_sections(code)
 
     @handle_api_error(fallback=[], update_ui=True)
-    def _fetch_parcelles(self, code: str, section: str) -> List:
+    def _fetch_parcelles(self, code: str, section: str) -> list:
         return list_parcelles(code, section)
 
     @handle_api_error(fallback=None, update_ui=False)
@@ -513,7 +511,7 @@ class CadreurPanel(QDockWidget):
 
         # Create a memory layer for the commune
         from PyQt5.QtCore import QVariant
-        from qgis.core import QgsVectorLayer, QgsFeature, QgsField
+        from qgis.core import QgsFeature, QgsField, QgsVectorLayer
 
         layer_name = f"{self._commune_name} ({self._selected_code})"
         layer = QgsVectorLayer("Polygon?crs=EPSG:4326", layer_name, "memory")
@@ -533,7 +531,7 @@ class CadreurPanel(QDockWidget):
 
         # Symbol: transparent fill with gray outline
         from PyQt5.QtGui import QColor
-        from qgis.core import QgsSimpleFillSymbolLayer, QgsSymbol, QgsSingleSymbolRenderer, QgsWkbTypes
+        from qgis.core import QgsSimpleFillSymbolLayer, QgsSingleSymbolRenderer, QgsSymbol, QgsWkbTypes
 
         commune_symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.PolygonGeometry)
         # Remove default layer(s)
