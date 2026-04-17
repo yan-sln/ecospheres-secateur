@@ -1,15 +1,15 @@
 [general]
-name=Ecosphères Cadrage
+name=Ecosphères Cadreur
 qgisMinimumVersion=3.28
-description=Intersecte les couches WFS du projet avec le contour d'une commune et extrait les entités concernées.
-version=0.1.0
-author=Ecosphères
+description=Génère des couches pour une commune, ses sections, et les parcelles des sections.
+version=0.1.1
+author=yan-sln
 email=contact@example.com
 about=Outil d'intersection spatiale : sélectionnez une commune, le plugin interroge automatiquement toutes les couches WFS visibles du projet et affiche les entités intersectantes.
-tracker=https://github.com/abulte/ecospheres-secateur/issues
-repository=https://github.com/abulte/ecospheres-secateur
-tags=wfs,intersection,commune,analyse spatiale
-homepage=https://github.com/abulte/ecospheres-secateur
+tracker=https://github.com/yan-sln/ecospheres-secateur/tree/cadreur/issues
+repository=https://github.com/yan-sln/ecospheres-secateur/tree/cadreur
+tags=cadastre,wfs,commune,analyse spatiale
+homepage=https://github.com/yan-sln/ecospheres-secateur/tree/cadreur
 category=Analysis
 icon=resources/icon.png
 experimental=True

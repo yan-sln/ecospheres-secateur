@@ -37,9 +37,9 @@ from core.entities_selector import (
 )
 
 
-class CadragePanel(QDockWidget):
+class CadreurPanel(QDockWidget):
     def __init__(self, iface, parent=None):
-        super().__init__("Ecosphères Cadrage", iface.mainWindow())
+        super().__init__("Ecosphères Cadreur", iface.mainWindow())
         self.iface = iface
         self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
 
