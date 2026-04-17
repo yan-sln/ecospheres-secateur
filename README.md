@@ -1,4 +1,4 @@
-# Ecosphères Cadrage
+# Ecosphères Cadreur
 
 Plugin QGIS de sélection géographique. Sélectionnez une commune, le plugin interroge automatiquement toutes les couches WFS visibles du projet et extrait les entités concernées.
 
@@ -9,12 +9,12 @@ Le plugin permet aux utilisateurs de :
 - Sélectionner une commune à partir de la liste déroulante de recherche
 - Choisir une section au sein de cette commune
 - Récupérer automatiquement toutes les parcelles de cette section
-- Créer des couches mémoire pour les résultats groupées sous "Résultats cadrage"
+- Créer des couches mémoire pour les résultats groupées sous "Résultats cadreur"
 
 ## Fonctionnalités
 - **Recherche** avec autocomplétion via le module `geoselector`.
 - **Sélection géographique** de toutes les parcelles dans une section.
-- **Résultats en couches mémoire** regroupées dans un groupe "Résultats cadrage".
+- **Résultats en couches mémoire** regroupées dans un groupe "Résultats cadreur".
 - **Export CSV** — un fichier par couche dans un dossier au choix.
 - **Export PDF** — rapport cartographique multi-pages avec fond de carte IGN Plan IGN v2.
 
@@ -39,11 +39,11 @@ Puis dans QGIS : **Extensions > Gérer/Installer > chercher "Ecosphères Séca
 | Ressources | `resources/icon.png`, `resources/report_page.qpt` | fournis dans le dépôt |
 
 ## Utilisation du plugin
-1. Activer le plugin depuis le menu **Extensions → Gérer/Installer → Ecosphères Cadrage**.
+1. Activer le plugin depuis le menu **Extensions → Gérer/Installer → Ecosphères Cadreur**.
 2. Un icône apparaît dans la barre d’outils ; cliquer dessus pour ouvrir le panneau latéral.
 3. Taper le nom d’une commune (au moins 2 caractères) et choisir dans la liste proposée.
 4. Sélectionner la section puis cliquer **Interroger** : le plugin récupère les géométries des parcelles et crée des calques mémoire contenant toutes les parcelles de la section.
-5. Les résultats apparaissent dans le groupe "Résultats cadrage" du projet.
+5. Les résultats apparaissent dans le groupe "Résultats cadreur" du projet.
 
 ## Développement & tests
 ```bash
