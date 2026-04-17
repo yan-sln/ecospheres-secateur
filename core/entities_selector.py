@@ -52,12 +52,6 @@ except Exception:  # pragma: no cover
     _section_selector = StubSelector1()
     _parcelle_selector = StubSelector1()
 
-# Ensure entity classes are defined for isinstance checks even when geoselector is unavailable
-try:
-    from geoselector.core.entities import Commune, Parcelle, Section  # type: ignore
-except Exception:
-    Commune = Parcelle = Section = object
-
 
 def search_communes(text: str) -> list[Commune]:
     """Search communes by name.
@@ -90,50 +84,38 @@ def list_parcelles(commune_code: str, section_code: str) -> list[Parcelle]:
 
 
 def fetch_entity_geometry(entity) -> QgsGeometry | None:
-    """Fetch the geometry of an entity and return it as a ``QgsGeometry``.
-    Handles cases where the entity may lack a configured service.
-    """
-    # Ensure the entity has a service attached if missing
-    if getattr(entity, "_service", None) is None:
-        try:
-            if isinstance(entity, Commune):
-                entity.set_service(_commune_selector.service)
-            elif isinstance(entity, Section):
-                entity.set_service(_section_selector.service)
-            elif isinstance(entity, Parcelle):
-                entity.set_service(_parcelle_selector.service)
-        except Exception:
+    """Fetch the geometry of an entity and return it as a ``QgsGeometry``."""
+    # Ensure the entity has its service set if it's not already set
+    # This handles cases where an entity was created outside the normal selector flow
+    if entity._service is None:
+        # Assign the appropriate service based on entity type so that geometry can be fetched.
+        # The selector instances expose their underlying service.
+        from geoselector.core.entities import Commune, Section, Parcelle  # type: ignore
+
+        if isinstance(entity, Commune):
+            entity.set_service(_commune_selector.service)  # type: ignore[attr-defined]
+        elif isinstance(entity, Section):
+            entity.set_service(_section_selector.service)  # type: ignore[attr-defined]
+        elif isinstance(entity, Parcelle):
+            entity.set_service(_parcelle_selector.service)  # type: ignore[attr-defined]
+        else:
+            # No known service – geometry fetch will likely fail.
             pass
-    # Attempt to retrieve geometry via the entity method (force fetch)
-    try:
-        geojson = entity.get_geometry(force=True)
-    except Exception:
-        geojson = None
 
-    # Fallback: use the appropriate selector's get_geometry if the direct call failed
-    if not geojson:
-        try:
-            # Types are imported in the module scope when the geoselector is available
-            if isinstance(entity, Commune):
-                # Use the commune code as identifier for geometry fetch
-                geojson = _commune_selector.get_geometry(entity.code)
-            elif isinstance(entity, Section):
-                # Section identifier is its "section" attribute
-                geojson = _section_selector.get_geometry(entity.section)
-            elif isinstance(entity, Parcelle):
-                # Parcelle identifier is its "feature_id" attribute
-                geojson = _parcelle_selector.get_geometry(entity.feature_id)
-        except Exception:
-            geojson = None
-
+    # Call the entity's get_geometry method which handles service integration properly
+    geojson = entity.get_geometry()
     if not geojson:
         return None
 
-    # Validate that the returned geometry is a dict with a "type" key
-    if not isinstance(geojson, dict) or "type" not in geojson:
+    # Validate that the returned geometry is valid and has the expected structure
+    if not isinstance(geojson, dict):
         return None
 
-    # Convert GeoJSON to QgsGeometry via QgsJsonUtils
+    # Check if we have a geometry type
+    if "type" not in geojson:
+        return None
+
+    # Additional validation to ensure we're dealing with a valid geometry
     try:
         feature_collection = json.dumps(
             {
@@ -142,8 +124,11 @@ def fetch_entity_geometry(entity) -> QgsGeometry | None:
             }
         )
         features = QgsJsonUtils.stringToFeatureList(feature_collection)
-        return features[0].geometry() if features else None
+        if features:
+            return features[0].geometry()
+        return None
     except Exception:
+        # If there's any issue with parsing the geometry, return None
         return None
 
 
