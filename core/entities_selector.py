@@ -30,9 +30,6 @@ except ImportError:  # pragma: no cover
         def get_geometry(self, *args, **kwargs):
             return None
 
-        def clear_cache(self):
-            pass
-
     _commune_selector = _StubSelector()
     _section_selector = _StubSelector()
     _parcelle_selector = _StubSelector()
@@ -44,9 +41,6 @@ except Exception:  # pragma: no cover
 
         def get_geometry(self, *args, **kwargs):
             return None
-
-        def clear_cache(self):
-            pass
 
     _commune_selector = StubSelector1()
     _section_selector = StubSelector1()
@@ -120,29 +114,3 @@ def fetch_entity_geometry(entity) -> QgsGeometry | None:
     except Exception:
         # If there's any issue with parsing the geometry, return None
         return None
-
-
-def clear_cache():
-    """Clear the internal cache of all selectors."""
-    global _commune_selector, _section_selector, _parcelle_selector
-    try:
-        # Try to call clear_cache method if it exists on selectors
-        if hasattr(_commune_selector, "clear_cache"):
-            _commune_selector.clear_cache()
-        if hasattr(_section_selector, "clear_cache"):
-            _section_selector.clear_cache()
-        if hasattr(_parcelle_selector, "clear_cache"):
-            _parcelle_selector.clear_cache()
-    except Exception:
-        # In case of failure, recreate selectors to clear their cache
-        try:
-            from geoselector.core.entities import Commune, Parcelle, Section  # type: ignore
-            from geoselector.core.selector import SelectorFactory  # type: ignore
-
-            # Recreate selectors to clear their cache
-            _commune_selector = SelectorFactory.create_selector(Commune)
-            _section_selector = SelectorFactory.create_selector(Section)
-            _parcelle_selector = SelectorFactory.create_selector(Parcelle)
-        except Exception:
-            # In case of complete failure, stay with stubs
-            pass

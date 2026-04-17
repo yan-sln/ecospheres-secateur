@@ -35,7 +35,6 @@ from qgis.PyQt.QtWidgets import (  # noqa: UP035
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + "/..")
 
 from core.entities_selector import (
-    clear_cache,
     fetch_entity_geometry,
     list_parcelles,
     list_sections,
@@ -145,10 +144,6 @@ class CadreurPanel(QDockWidget):
         self.run_button.setEnabled(False)
         self.run_button.clicked.connect(self._on_show_parcels)
         btn_row.addWidget(self.run_button)
-
-        self.clear_cache_button = QPushButton("Vider le cache")
-        self.clear_cache_button.clicked.connect(self._on_clear_cache)
-        btn_row.addWidget(self.clear_cache_button)
 
         layout.addLayout(btn_row)
 
@@ -881,14 +876,6 @@ class CadreurPanel(QDockWidget):
         except Exception:
             # Silently ignore errors in grouping to prevent breaking the main functionality
             pass
-
-    def _on_clear_cache(self):
-        """Clear the cache of geoselector and update UI."""
-        try:
-            clear_cache()
-            self.status_label.setText("Cache vidé avec succès.")
-        except Exception as e:
-            self.status_label.setText(f"Erreur lors du vidage du cache : {e}")
 
     def _start_progress(self, total):
         self.progress_bar.setMaximum(total)
