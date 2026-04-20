@@ -23,7 +23,7 @@ from ..core.entities_selector import (
 from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.intersector import (
     add_results_to_project,
-    find_wfs_layers,
+    find_layers,
     intersect_parcelle,
 )
 
@@ -280,6 +280,7 @@ class SecateurPanel(QDockWidget):
             return
 
         geom = fetch_parcel_geometry(parcel_obj)
+        # parcel_crs = parcel_obj.layer().crs()
         if geom is None or geom.isEmpty():
             self.status_label.setText("Erreur : impossible de récupérer la géométrie.")
             self.run_button.setEnabled(True)
@@ -287,9 +288,9 @@ class SecateurPanel(QDockWidget):
 
         self._parcel_geom = geom
 
-        layers = find_wfs_layers()
+        layers = find_layers()
         if not layers:
-            self.status_label.setText("Aucune couche WFS trouvée dans le projet.")
+            self.status_label.setText("Aucune couche trouvée dans le projet.")
             self.run_button.setEnabled(True)
             return
 
@@ -300,7 +301,12 @@ class SecateurPanel(QDockWidget):
             if current < total:
                 self._update_progress(current, total, f"Intersection {current + 1}/{total} : {name}")
 
-        results = intersect_parcelle(geom, layers, progress_callback=progress)
+        results = intersect_parcelle(
+            geom,
+            layers,
+            progress_callback=progress,
+            parcel_crs=None,  # parcel_crs
+        )
 
         if results:
             add_results_to_project(results)

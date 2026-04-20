@@ -3,30 +3,23 @@ import os
 import re
 
 from qgis.core import (
-    QgsCoordinateReferenceSystem,
     QgsGeometry,
-    QgsLayout,
+    QgsLayerTree,
     QgsLayoutExporter,
     QgsLayoutItemLabel,
     QgsLayoutItemMap,
     QgsLayoutItemPage,
-    QgsProject,
-    QgsRasterLayer,
-    QgsReadWriteContext,
-    QgsReport,
-    QgsReportSectionLayout,
-    QgsVectorLayer,
-    QgsRectangle,
-    QgsLayerTree,
-    QgsLegendStyle,
-    QgsLineSymbol,
     QgsLayoutPoint,
     QgsLayoutSize,
+    QgsLegendStyle,
+    QgsLineSymbol,
+    QgsProject,
+    QgsRectangle,
     QgsUnitTypes,
+    QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QDate, QDateTime, QTime, QPointF  # noqa: UP035
+from qgis.PyQt.QtCore import QDate, QDateTime, QPointF, QTime  # noqa: UP035
 from qgis.PyQt.QtGui import QFont, QPolygonF  # noqa: UP035
-from qgis.PyQt.QtXml import QDomDocument  # noqa: UP035
 
 
 def _format_value(val):
@@ -83,20 +76,14 @@ def export_results_to_csv(
 
 
 # New enhanced PDF export functionality
-import os
 from datetime import datetime
-from qgis.core import *
-from PyQt5 import QtCore
-from PyQt5 import QtGui
-from PyQt5.QtGui import QFont
-from PyQt5.QtCore import QVariant
-from qgis.PyQt.QtWidgets import QMessageBox
 
+from PyQt5.QtGui import QFont
+from qgis.core import *
+from qgis.core import QgsVectorLayer
+from qgis.gui import *
 from qgis.PyQt.QtCore import *
 from qgis.PyQt.QtGui import *
-from qgis.gui import *
-from qgis.core import *
-from qgis.core import QgsProject, QgsMapLayer, QgsVectorLayer
 
 # ============================================================
 # OUTILS
@@ -342,7 +329,6 @@ def add_legend(layout, map_item, layers, nb_items):
 
 
 def Export_Legende_pdf(path_name, rapport_name, project, manager, liste_couches, nb_items):
-
     layout_name = f"Legende_{datetime.now().strftime('%Y%m%d_%H%M')}"
     layout = create_layout(project, manager, layout_name)
 

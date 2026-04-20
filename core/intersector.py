@@ -12,8 +12,8 @@ from qgis.core import (
 )
 
 
-def find_wfs_layers() -> list[QgsVectorLayer]:
-    """Return visible WFS vector layers by walking the full layer tree."""
+def find_layers() -> list[QgsVectorLayer]:
+    """Return visible layers by walking the full layer tree."""
     project = QgsProject.instance()
     if project is None:
         return []
@@ -21,43 +21,37 @@ def find_wfs_layers() -> list[QgsVectorLayer]:
     if root is None:
         return []
     results = []
-    _collect_wfs_layers(root, results)
+    _collect_vector_layers(root, results)
     return results
 
 
-def _collect_wfs_layers(group: QgsLayerTreeGroup, out: list[QgsVectorLayer]):
+def _collect_vector_layers(group: QgsLayerTreeGroup, out: list[QgsVectorLayer]):
     for child in group.children():
         if isinstance(child, QgsLayerTreeGroup):
             if child.isVisible():
-                _collect_wfs_layers(child, out)
+                _collect_vector_layers(child, out)
         elif isinstance(child, QgsLayerTreeLayer):
             if not child.isVisible():
                 continue
             layer = child.layer()
-            if isinstance(layer, QgsVectorLayer) and _is_wfs(layer):
+            if isinstance(layer, QgsVectorLayer):
                 out.append(layer)
-
-
-def _is_wfs(layer: QgsVectorLayer) -> bool:
-    if layer.providerType().upper() == "WFS":
-        return True
-    # Some WFS layers are loaded via OGR — check source URI
-    src = layer.source().lower()
-    return "service=wfs" in src or "/wfs?" in src or "/wfs/" in src
 
 
 def intersect_parcelle(
     parcelle_geom: QgsGeometry,
     layers: list[QgsVectorLayer],
     progress_callback=None,
+    parcel_crs: QgsCoordinateReferenceSystem | None = None,
 ) -> list[QgsVectorLayer]:
     """Intersect a parcel geometry with the given WFS layers.
 
     This function performs the actual intersection of parcel geometry with
     WFS layers, returning memory layers with matching features.
     """
-    # Reproject parcel geometry to layer CRS
-    parcelle_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+    # Determine parcel CRS; if not provided, default to EPSG:4326 (temporary fallback)
+    if parcel_crs is None:
+        parcel_crs = QgsCoordinateReferenceSystem("EPSG:4326")
     results = []
 
     # Get project instance early to avoid repeated calls
@@ -87,12 +81,10 @@ def intersect_parcelle(
 
         # Try to transform geometry to layer CRS
         try:
-            if layer_crs != parcelle_crs:
-                transform = QgsCoordinateTransform(parcelle_crs, layer_crs, project)
+            if layer_crs != parcel_crs:
+                transform = QgsCoordinateTransform(parcel_crs, layer_crs, project)
                 local_geom = QgsGeometry(parcelle_geom)
-                if not local_geom.transform(transform):
-                    # If transformation fails, fall back to original geometry
-                    local_geom = parcelle_geom
+                local_geom.transform(transform)
             else:
                 local_geom = parcelle_geom
         except Exception:
