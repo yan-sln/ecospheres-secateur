@@ -1,5 +1,4 @@
 from qgis.core import (
-    QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsFeature,
     QgsFeatureRequest,
@@ -12,127 +11,123 @@ from qgis.core import (
 )
 
 
-def find_layers() -> list[QgsVectorLayer]:
-    """Return visible layers by walking the full layer tree."""
+# ---------------- LAYERS ---------------- #
+
+def find_layers(exclude: QgsVectorLayer | None = None) -> list[QgsVectorLayer]:
     project = QgsProject.instance()
     if project is None:
         return []
+
     root = project.layerTreeRoot()
     if root is None:
         return []
+
     results = []
-    _collect_vector_layers(root, results)
+    _collect_layers(root, results, exclude)
     return results
 
 
-def _collect_vector_layers(group: QgsLayerTreeGroup, out: list[QgsVectorLayer]):
+def _collect_layers(group, out, exclude):
     for child in group.children():
         if isinstance(child, QgsLayerTreeGroup):
             if child.isVisible():
-                _collect_vector_layers(child, out)
+                _collect_layers(child, out, exclude)
+
         elif isinstance(child, QgsLayerTreeLayer):
             if not child.isVisible():
                 continue
+
             layer = child.layer()
-            if isinstance(layer, QgsVectorLayer):
+
+            if isinstance(layer, QgsVectorLayer) and layer != exclude:
                 out.append(layer)
 
 
-def intersect_parcelle(
-    parcelle_geom: QgsGeometry,
+# ---------------- INTERSECTION ---------------- #
+
+def intersect_layer(
+    source_layer: QgsVectorLayer,
     layers: list[QgsVectorLayer],
     progress_callback=None,
-    parcel_crs: QgsCoordinateReferenceSystem | None = None,
 ) -> list[QgsVectorLayer]:
-    """Intersect a parcel geometry with the given WFS layers.
 
-    This function performs the actual intersection of parcel geometry with
-    WFS layers, returning memory layers with matching features.
-    """
-    # Determine parcel CRS; if not provided, default to EPSG:4326 (temporary fallback)
-    if parcel_crs is None:
-        parcel_crs = QgsCoordinateReferenceSystem("EPSG:4326")
     results = []
 
-    # Get project instance early to avoid repeated calls
     project = QgsProject.instance()
     if project is None:
         return results
 
-    # Get layer tree root early
-    root = project.layerTreeRoot()
-    if root is None:
-        return results
+    source_crs = source_layer.crs()
+
+    source_features = list(source_layer.getSelectedFeatures())
+    if not source_features:
+        source_features = list(source_layer.getFeatures())
 
     for i, layer in enumerate(layers):
         if progress_callback:
             progress_callback(i, len(layers), layer.name())
 
-        # Validate layer before proceeding
-        if layer is None:
+        if layer is None or layer == source_layer:
             continue
 
-        # Reproject parcel geometry to layer CRS
+        # ⚡ optimisation rapide
+        if not layer.extent().intersects(source_layer.extent()):
+            continue
+
         layer_crs = layer.crs()
-        if layer_crs is None:
-            continue
 
-        local_geom = None
+        geom_type = QgsWkbTypes.displayString(layer.wkbType())
 
-        # Try to transform geometry to layer CRS
-        try:
-            if layer_crs != parcel_crs:
-                transform = QgsCoordinateTransform(parcel_crs, layer_crs, project)
-                local_geom = QgsGeometry(parcelle_geom)
-                local_geom.transform(transform)
-            else:
-                local_geom = parcelle_geom
-        except Exception:
-            # If any error occurs during transformation, use original geometry
-            # Log the error for debugging but continue processing
-            local_geom = parcelle_geom
-
-        # Add a small buffer to the bounding box to ensure touching features are included
-        bbox = local_geom.boundingBox()
-        if not bbox.isEmpty():
-            buffer_distance = max(bbox.width(), bbox.height()) * 0.01  # 1% buffer
-            bbox.grow(buffer_distance)
-
-        geom_type_str = QgsWkbTypes.displayString(layer.wkbType())
         mem_layer = QgsVectorLayer(
-            f"{geom_type_str}?crs={layer.crs().authid()}",
+            f"{geom_type}?crs={layer_crs.authid()}",
             f"{layer.name()} — résultat",
             "memory",
         )
-        mem_provider = mem_layer.dataProvider()
 
-        # Validate memory layer provider
-        if mem_provider is None:
-            continue
-
-        mem_provider.addAttributes(layer.fields().toList())
+        provider = mem_layer.dataProvider()
+        provider.addAttributes(layer.fields().toList())
         mem_layer.updateFields()
 
-        request = QgsFeatureRequest().setFilterRect(bbox)
-        matching = []
-        try:
-            # Get features and iterate through them
-            features = [feat for feat in layer.getFeatures(request)]
-            for feat in features:
-                # Validate feature before processing
-                if feat is None or not feat.hasGeometry():
+        transform = None
+        if source_crs != layer_crs:
+            try:
+                transform = QgsCoordinateTransform(source_crs, layer_crs, project)
+            except Exception:
+                transform = None
+
+        matches = []
+
+        for src_feat in source_features:
+            if not src_feat.hasGeometry():
+                continue
+
+            geom = QgsGeometry(src_feat.geometry())
+
+            if transform:
+                try:
+                    geom.transform(transform)
+                except Exception:
                     continue
-                if local_geom.intersects(feat.geometry()):
+
+            bbox = geom.boundingBox()
+            
+            # Met un buffer à 1 % ; désactivé sinon prend autre parcelle
+            # bbox.grow(max(bbox.width(), bbox.height()) * 0.01)
+
+            request = QgsFeatureRequest().setFilterRect(bbox)
+
+            for feat in layer.getFeatures(request):
+                if not feat.hasGeometry():
+                    continue
+
+                if geom.intersects(feat.geometry()):
                     new_feat = QgsFeature(mem_layer.fields())
                     new_feat.setGeometry(feat.geometry())
                     new_feat.setAttributes(feat.attributes())
-                    matching.append(new_feat)
-        except Exception:
-            # If there's an error getting features, skip this layer
-            continue
+                    matches.append(new_feat)
 
-        if matching:
-            mem_provider.addFeatures(matching)
+        if matches:
+            provider.addFeatures(matches)
             mem_layer.updateExtents()
             results.append(mem_layer)
 
@@ -142,15 +137,14 @@ def intersect_parcelle(
     return results
 
 
+# ---------------- PROJECT ---------------- #
+
 def add_results_to_project(result_layers: list[QgsVectorLayer]):
-    """Add result layers to the project under a 'Résultats secateur' group."""
     project = QgsProject.instance()
     if project is None:
         return
 
     root = project.layerTreeRoot()
-    if root is None:
-        return
 
     group = root.findGroup("Résultats secateur")
     if group:
@@ -160,5 +154,4 @@ def add_results_to_project(result_layers: list[QgsVectorLayer]):
 
     for layer in result_layers:
         project.addMapLayer(layer, False)
-        if group is not None:
-            group.addLayer(layer)
+        group.addLayer(layer)
