@@ -93,10 +93,7 @@ class SecateurPanel(QDockWidget):
     # ---------------- LAYERS ---------------- #
 
     def _load_layers(self):
-        self._layers = [
-            l for l in QgsProject.instance().mapLayers().values()
-            if isinstance(l, QgsVectorLayer)
-        ]
+        self._layers = [l for l in QgsProject.instance().mapLayers().values() if isinstance(l, QgsVectorLayer)]
         self._model.setStringList(sorted([l.name() for l in self._layers]))
 
     def _on_text_changed(self, text):
@@ -123,7 +120,11 @@ class SecateurPanel(QDockWidget):
         layer = self.iface.activeLayer()
         if isinstance(layer, QgsVectorLayer):
             self._selected_layer = layer
+            # Bloquer temporairement les signaux du champ de recherche pour éviter que
+            # setText déclenche _on_text_changed, qui réinitialiserait la sélection.
+            self.layer_search.blockSignals(True)
             self.layer_search.setText(layer.name())
+            self.layer_search.blockSignals(False)
             self.status_label.setText(f"Couche active : {layer.name()}")
             self.run_button.setEnabled(True)
         else:
@@ -144,7 +145,7 @@ class SecateurPanel(QDockWidget):
         self._start_progress(len(layers))
 
         def progress(current, total, name):
-            self._update_progress(current, total, f"{current+1}/{total} : {name}")
+            self._update_progress(current, total, f"{current + 1}/{total} : {name}")
 
         results = intersect_layer(
             self._selected_layer,
@@ -198,4 +199,5 @@ class SecateurPanel(QDockWidget):
 
     def _force_repaint(self):
         from qgis.PyQt.QtWidgets import QApplication
+
         QApplication.processEvents()
