@@ -785,99 +785,18 @@ class CadreurPanel(QDockWidget):
         self.run_button.setEnabled(True)
 
     def _group_layers_by_commune_and_section(self, layers):
-        """Group layers hierarchically by commune and section."""
-        try:
-            project = QgsProject.instance()
-            if project:
-                root = project.layerTreeRoot()
-                if root:
-                    # Get the section and commune info from the panel data
-                    section_code = self._selected_section
-                    commune_name = self._commune_name or "Commune inconnue"
-
-                    # Create commune group if it doesn't exist
-                    commune_group_name = commune_name
-                    commune_group = None
-
-                    # Look for existing commune group
-                    for child in root.children() if root.children() else []:
-                        if isinstance(child, QgsLayerTreeGroup) and child.name() == commune_group_name:
-                            commune_group = child
-                            break
-
-                    # Create commune group if it doesn't exist
-                    if not commune_group:
-                        commune_group = root.addGroup(commune_group_name)
-
-                    # Create section group inside commune group
-                    section_group_name = f"Section {section_code}"
-                    section_group = None
-
-                    # Look for existing section group
-                    if commune_group:
-                        for child in commune_group.children() if commune_group.children() else []:
-                            if isinstance(child, QgsLayerTreeGroup) and child.name() == section_group_name:
-                                section_group = child
-                                break
-
-                    # Create section group if it doesn't exist
-                    if not section_group and commune_group:
-                        section_group = commune_group.addGroup(section_group_name)
-
-                    # Move all layers to the section group
-                    if section_group:
-                        for layer in layers:
-                            section_group.addLayer(layer)
-        except Exception:
-            # Silently ignore errors in grouping to prevent breaking the main functionality
-            pass
+        """Group layers hierarchically by commune and section, adding them to the project and the appropriate group."""
+        self._group_layers(
+            layers,
+            lambda l: [
+                self._commune_name or "Commune inconnue",
+                f"Section {getattr(l, 'section', self._selected_section)}",
+            ],
+        )
 
     def _group_layers_by_commune_and_sections(self, layers):
-        """Group layers hierarchically by commune and sections."""
-        try:
-            project = QgsProject.instance()
-            if project:
-                root = project.layerTreeRoot()
-                if root:
-                    # Get the commune info from the panel data
-                    commune_name = self._commune_name or "Commune inconnue"
-
-                    # Create commune group if it doesn't exist
-                    commune_group_name = commune_name
-                    commune_group = None
-
-                    # Look for existing commune group
-                    for child in root.children() if root.children() else []:
-                        if isinstance(child, QgsLayerTreeGroup) and child.name() == commune_group_name:
-                            commune_group = child
-                            break
-
-                    # Create commune group if it doesn't exist
-                    if not commune_group:
-                        commune_group = root.addGroup(commune_group_name)
-
-                    # Create "Sections" group inside commune group
-                    sections_group_name = "Sections"
-                    sections_group = None
-
-                    # Look for existing sections group
-                    if commune_group:
-                        for child in commune_group.children() if commune_group.children() else []:
-                            if isinstance(child, QgsLayerTreeGroup) and child.name() == sections_group_name:
-                                sections_group = child
-                                break
-
-                    # Create sections group if it doesn't exist
-                    if not sections_group and commune_group:
-                        sections_group = commune_group.addGroup(sections_group_name)
-
-                    # Move all layers to the sections group
-                    if sections_group:
-                        for layer in layers:
-                            sections_group.addLayer(layer)
-        except Exception:
-            # Silently ignore errors in grouping to prevent breaking the main functionality
-            pass
+        """Group layers under a commune → "Sections" subgroup, adding them to the project and group."""
+        self._group_layers(layers, lambda l: [self._commune_name or "Commune inconnue", "Sections"])
 
     def _start_progress(self, total):
         self.progress_bar.setMaximum(total)
@@ -917,6 +836,57 @@ class CadreurPanel(QDockWidget):
             )
 
         return node
+
+    def _group_layers(self, layers, path_builder):
+        """Add *layers* to the project and place them in groups defined by *path_builder*.
+
+        *layers* – iterable of QgsVectorLayer objects.
+        *path_builder* – callable receiving a layer and returning a list of group names
+                          (e.g. ``lambda l: [self._commune_name, f"Section {l.section}"]``).
+        The method performs a single pass (O(N)) and caches created groups for speed.
+        """
+        project = QgsProject.instance()
+        if not project:
+            return
+        root = project.layerTreeRoot()
+        if not root:
+            return
+
+        # Cache: tuple(path) → QgsLayerTreeGroup
+        group_cache = {}
+        for layer in layers:
+            # Build the hierarchical path for this layer
+            try:
+                path = list(path_builder(layer))
+            except Exception:
+                # If the builder fails, skip this layer silently
+                continue
+            if not path:
+                continue
+
+            path_key = tuple(path)
+            group = group_cache.get(path_key)
+            if group is None:
+                # Try to retrieve an existing group chain
+                group = self._get_group_by_path(path)
+                if group is None:
+                    # Create missing groups step by step
+                    parent = root
+                    for name in path:
+                        child = next(
+                            (c for c in parent.children() if isinstance(c, QgsLayerTreeGroup) and c.name() == name),
+                            None,
+                        )
+                        if child is None:
+                            child = parent.addGroup(name)
+                        parent = child
+                    group = parent
+                group_cache[path_key] = group
+
+            # Add layer to project (without auto‑adding to tree) and then to the target group
+            project.addMapLayer(layer, False)
+            if group is not None:
+                group.addLayer(layer)
 
     def _missing_section_layers(self):
         path = [self._commune_name or "Commune inconnue", "Sections"]
@@ -986,26 +956,5 @@ class CadreurPanel(QDockWidget):
         return [commune_obj]
 
     def _group_layers_by_commune(self, layers):
-        """Group given layers under a top‑level "Commune" group.
-        If the group does not exist, it is created.
-        """
-        try:
-            project = QgsProject.instance()
-            if not project:
-                return
-            root = project.layerTreeRoot()
-            if not root:
-                return
-            # Ensure top‑level group "Communes"
-            commune_group = None
-            for child in root.children() if root.children() else []:
-                if isinstance(child, QgsLayerTreeGroup) and child.name() == "Communes":
-                    commune_group = child
-                    break
-            if not commune_group:
-                commune_group = root.addGroup("Communes")
-            # Add each layer to the group
-            for layer in layers:
-                commune_group.addLayer(layer)
-        except Exception:
-            pass
+        """Group layers under the top‑level "Communes" group, adding them to the project and group."""
+        self._group_layers(layers, lambda l: ["Communes"])
