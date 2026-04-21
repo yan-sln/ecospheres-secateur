@@ -549,6 +549,10 @@ class CadreurPanel(QDockWidget):
         project = QgsProject.instance()
         if project:
             project.addMapLayer(layer, False)
+            # Zoom to the newly added commune layer
+            canvas = self.iface.mapCanvas()
+            canvas.setExtent(layer.extent())
+            canvas.refresh()
 
         self.status_label.setText("Géométrie de la commune affichée.")
         self.show_commune_button.setEnabled(True)
