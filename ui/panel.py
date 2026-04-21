@@ -160,8 +160,8 @@ class SecateurPanel(QDockWidget):
             self.export_csv_button.setEnabled(True)
             self.export_pdf_button.setEnabled(True)
 
-            total = sum(r.featureCount() for r in results)
-            self._finish_progress(f"{total} entités trouvées.")
+            layer_count = len(results)
+            self._finish_progress(f"{layer_count} couches trouvées.")
         else:
             self._result_layers = []
             self.export_csv_button.setEnabled(False)
