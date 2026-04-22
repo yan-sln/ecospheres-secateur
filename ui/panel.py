@@ -284,7 +284,6 @@ class CadreurPanel(QDockWidget):
 
         self.show_sections_button.setEnabled(False)
         self.status_label.setText("Récupération des géométries des sections…")
-        
 
         # Get all sections for the selected commune
         if not self._sections:
@@ -474,7 +473,6 @@ class CadreurPanel(QDockWidget):
         # Disable button while processing
         self.show_commune_button.setEnabled(False)
         self.status_label.setText("Récupération de la géométrie de la commune…")
-        
 
         # Check if the commune layer already exists
         missing = self._missing_commune_layers()
@@ -542,6 +540,10 @@ class CadreurPanel(QDockWidget):
         self._group_layers_by_commune([layer])
         project = QgsProject.instance()
         if project:
+            # Ensure extents are up‑to‑date before adding to the project
+            layer.updateExtents()
+            # Trigger repaint to make sure the layer is rendered
+            layer.triggerRepaint()
             # Zoom to the newly added commune layer
             canvas = self.iface.mapCanvas()
             canvas.setExtent(layer.extent())
@@ -574,7 +576,6 @@ class CadreurPanel(QDockWidget):
 
         self.run_button.setEnabled(False)
         self.status_label.setText("Récupération des géométries des parcelles…")
-        
 
         # Get all parcels in the selected section
         if not self._parcelles:
@@ -778,7 +779,6 @@ class CadreurPanel(QDockWidget):
     def _update_progress(self, current, total, text):
         self.progress_bar.setValue(current)
         self.status_label.setText(text)
-        
 
     def _finish_progress(self, text):
         self.progress_bar.setVisible(False)
