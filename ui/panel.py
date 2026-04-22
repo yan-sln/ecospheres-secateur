@@ -84,7 +84,6 @@ class CadreurPanel(QDockWidget):
         self._selected_section = None
         self._parcelles = []
         self._commune_name = None
-        self._parcel_geom = None
         self._debounce_timer = QTimer(self)
         self._last_api_error_occurred: bool = False
         self._last_api_error_retryable: bool = False
@@ -285,7 +284,7 @@ class CadreurPanel(QDockWidget):
 
         self.show_sections_button.setEnabled(False)
         self.status_label.setText("Récupération des géométries des sections…")
-        self._force_repaint()
+        
 
         # Get all sections for the selected commune
         if not self._sections:
@@ -400,7 +399,8 @@ class CadreurPanel(QDockWidget):
                     # Add the feature to the layer
                     if provider.addFeature(feature):
                         # Apply the pre-created symbol to the layer
-                        layer.setRenderer(section_renderer)
+                        layer.setRenderer(section_renderer.clone())
+                        layer.triggerRepaint()
 
                         # Configure dynamic labeling for section number
                         layer_settings = QgsPalLayerSettings()
@@ -423,8 +423,8 @@ class CadreurPanel(QDockWidget):
                         layer_settings.enabled = True
 
                         labeling = QgsVectorLayerSimpleLabeling(layer_settings)
-                        layer.setLabelsEnabled(True)
                         layer.setLabeling(labeling)
+                        layer.setLabelsEnabled(True)
                         layer.triggerRepaint()
 
                         successful_layers.append(layer)
@@ -457,12 +457,6 @@ class CadreurPanel(QDockWidget):
         if successful_layers:
             self._group_layers_by_commune_and_sections(successful_layers)
 
-        # Add all layers to the project after grouping
-        project = QgsProject.instance()
-        if project and successful_layers:
-            for layer in successful_layers:
-                project.addMapLayer(layer, False)
-
         # Finish progress and update status
         if failed_count > 0:
             self._finish_progress(f"{len(successful_layers)} succès, {failed_count} erreurs")
@@ -480,7 +474,7 @@ class CadreurPanel(QDockWidget):
         # Disable button while processing
         self.show_commune_button.setEnabled(False)
         self.status_label.setText("Récupération de la géométrie de la commune…")
-        self._force_repaint()
+        
 
         # Check if the commune layer already exists
         missing = self._missing_commune_layers()
@@ -548,7 +542,6 @@ class CadreurPanel(QDockWidget):
         self._group_layers_by_commune([layer])
         project = QgsProject.instance()
         if project:
-            project.addMapLayer(layer, False)
             # Zoom to the newly added commune layer
             canvas = self.iface.mapCanvas()
             canvas.setExtent(layer.extent())
@@ -575,26 +568,13 @@ class CadreurPanel(QDockWidget):
         count = len(all_parcelles)
         self.run_button.setText(f"Charger les parcelles ({count})")
 
-    def _on_parcel_selected(self, index):
-        """Handle user selection of a parcel and enable the run button."""
-        if index < 0 or index >= len(self._parcelles):
-            return
-        parc = self._parcelles[index]
-        parcel_id = getattr(parc, "feature_id", None)
-        parcel_num = getattr(parc, "numero", "")
-        self._selected_parcel = parcel_id
-        self.run_button.setEnabled(True)
-        # Show the parcel number (or fallback to id) in the status label
-        display_num = parcel_num if parcel_num else str(parcel_id)
-        self.status_label.setText(f"Parcelle sélectionnée : {display_num}")
-
     def _on_show_parcels(self):
         if not (self._selected_code and self._selected_section):
             return
 
         self.run_button.setEnabled(False)
         self.status_label.setText("Récupération des géométries des parcelles…")
-        self._force_repaint()
+        
 
         # Get all parcels in the selected section
         if not self._parcelles:
@@ -713,9 +693,9 @@ class CadreurPanel(QDockWidget):
                     # Add the feature to the layer
                     if provider.addFeature(feature):
                         # Apply the pre-created symbol to the layer
-                        layer.setRenderer(parcel_renderer)
+                        layer.setRenderer(parcel_renderer.clone())
 
-                        # Configure dynamic labeling for parcel number
+                        # Labeling
                         layer_settings = QgsPalLayerSettings()
                         text_format = QgsTextFormat()
 
@@ -732,13 +712,11 @@ class CadreurPanel(QDockWidget):
 
                         layer_settings.fieldName = "numero"
                         layer_settings.placement = QgsPalLayerSettings.OverPoint
-
                         layer_settings.enabled = True
 
                         labeling = QgsVectorLayerSimpleLabeling(layer_settings)
-                        layer.setLabelsEnabled(True)
                         layer.setLabeling(labeling)
-                        layer.triggerRepaint()
+                        layer.setLabelsEnabled(True)
 
                         successful_layers.append(layer)
                         self._update_progress(i, total_parcelles, f"Parcelle {parcel_num} : ajoutée")
@@ -770,12 +748,6 @@ class CadreurPanel(QDockWidget):
         if successful_layers:
             self._group_layers_by_commune_and_section(successful_layers)
 
-        # Add all layers to the project after grouping
-        project = QgsProject.instance()
-        if project and successful_layers:
-            for layer in successful_layers:
-                project.addMapLayer(layer, False)
-
         # Finish progress and update status
         if failed_count > 0:
             self._finish_progress(f"{len(successful_layers)} succès, {failed_count} erreurs")
@@ -806,16 +778,11 @@ class CadreurPanel(QDockWidget):
     def _update_progress(self, current, total, text):
         self.progress_bar.setValue(current)
         self.status_label.setText(text)
-        self._force_repaint()
+        
 
     def _finish_progress(self, text):
         self.progress_bar.setVisible(False)
         self.status_label.setText(text)
-
-    def _force_repaint(self):
-        from qgis.PyQt.QtWidgets import QApplication  # noqa: UP035
-
-        QApplication.processEvents()
 
     def _get_group_by_path(self, path):
         """
@@ -883,10 +850,12 @@ class CadreurPanel(QDockWidget):
                     group = parent
                 group_cache[path_key] = group
 
-            # Add layer to project (without auto‑adding to tree) and then to the target group
-            project.addMapLayer(layer, False)
+            if not project.mapLayer(layer.id()):
+                project.addMapLayer(layer, False)
+
             if group is not None:
-                group.addLayer(layer)
+                group.insertLayer(-1, layer)
+                layer.triggerRepaint()
 
     def _missing_section_layers(self):
         path = [self._commune_name or "Commune inconnue", "Sections"]
