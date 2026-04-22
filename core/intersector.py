@@ -4,7 +4,7 @@ from qgis.core import (
     QgsProject,
     QgsVectorLayer,
 )
-import processing
+import processing  # type: ignore
 
 
 # ---------------- LAYERS ---------------- #
@@ -54,6 +54,9 @@ def intersect_layer(
     project = QgsProject.instance()
     if project is None:
         return results
+    
+    # Add source layer as special intersected object for PDF export
+    results.insert(0, source_layer)
 
     source_crs = source_layer.crs()
 

@@ -694,19 +694,20 @@ def Exports_GeoPDF(path_name, rapport_name, projet, manager, rec_emprise, liste_
 
 def export_results_to_pdf(
     result_layers: list[QgsVectorLayer],
-    commune_name: str,
-    commune_geom: QgsGeometry,
     output_path: str,
     progress_callback=None,
 ):
     """Export a multi-page PDF report with enhanced layout and GeoPDF capabilities.
 
-    progress_callback(current, total, name) is called before each page is built.
+    Parameters:
+        result_layers: list of QgsVectorLayer, first element should be the source layer.
+        output_path: directory or full file path for the PDF.
+        progress_callback: optional callable(current, total, name).
     """
     project = QgsProject.instance()
     manager = project.layoutManager()
 
-    # If output_path is a directory, create a proper filename
+    # Resolve output path
     if os.path.isdir(output_path):
         date_H_M = datetime.strftime(datetime.now(), "%Y_%m_%d_%Hh_%Mmin")
         filename = f"Rapport_cartographique_d_interrogation_ADS_des_parcelles_{date_H_M}.pdf"
@@ -714,17 +715,25 @@ def export_results_to_pdf(
     else:
         full_path = output_path
 
-    # Buffered extent (5% margin)
-    bbox = commune_geom.boundingBox()
+    # Determine extent from the first result layer (source layer)
+    if not result_layers:
+        raise ValueError("result_layers must contain at least the source layer for extent calculation")
+    src_layer = result_layers[0]
+    if isinstance(src_layer, QgsVectorLayer):
+        bbox = src_layer.extent()
+    else:
+        bbox = src_layer.boundingBox()
+
+    # Apply 5% buffer to extent
     bbox.grow(bbox.width() * 0.05 + bbox.height() * 0.05)
 
     # Convert bbox to list for compatibility
     rec_emprise = [bbox.xMinimum(), bbox.yMinimum(), bbox.xMaximum(), bbox.yMaximum()]
 
-    # Get all active layer names for legend
+    # Layer names for legend
     layer_names = [layer.name() for layer in result_layers]
 
-    # Create the main GeoPDF
-    Exports_GeoPDF(os.path.dirname(full_path), commune_name, project, manager, rec_emprise, layer_names)
+    # Generate the GeoPDF
+    Exports_GeoPDF(os.path.dirname(full_path), "nom de carte temporaire", project, manager, rec_emprise, layer_names)
 
-    # The export process is handled entirely by Exports_GeoPDF function
+    # Export is performed inside Exports_GeoPDF

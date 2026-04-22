@@ -178,8 +178,7 @@ class SecateurPanel(QDockWidget):
     def _on_export_pdf(self):
         folder = QFileDialog.getExistingDirectory(self, "Dossier PDF")
         if folder:
-            # export_results_to_pdf(self._result_layers, "Résultats", None, folder)
-            pass
+            export_results_to_pdf(self._result_layers, folder, None)
 
     # ---------------- PROGRESS ---------------- #
 
