@@ -1,17 +1,14 @@
 from qgis.core import (
-    QgsCoordinateTransform,
-    QgsFeature,
-    QgsFeatureRequest,
-    QgsGeometry,
     QgsLayerTreeGroup,
     QgsLayerTreeLayer,
     QgsProject,
     QgsVectorLayer,
-    QgsWkbTypes,
 )
+import processing
 
 
 # ---------------- LAYERS ---------------- #
+
 
 def find_layers(exclude: QgsVectorLayer | None = None) -> list[QgsVectorLayer]:
     project = QgsProject.instance()
@@ -45,6 +42,7 @@ def _collect_layers(group, out, exclude):
 
 # ---------------- INTERSECTION ---------------- #
 
+
 def intersect_layer(
     source_layer: QgsVectorLayer,
     layers: list[QgsVectorLayer],
@@ -59,10 +57,6 @@ def intersect_layer(
 
     source_crs = source_layer.crs()
 
-    source_features = list(source_layer.getSelectedFeatures())
-    if not source_features:
-        source_features = list(source_layer.getFeatures())
-
     for i, layer in enumerate(layers):
         if progress_callback:
             progress_callback(i, len(layers), layer.name())
@@ -70,65 +64,52 @@ def intersect_layer(
         if layer is None or layer == source_layer:
             continue
 
-        # ⚡ optimisation rapide
-        if not layer.extent().intersects(source_layer.extent()):
-            continue
+        # Ensure both layers share the same CRS for spatial queries
+        if source_crs != layer.crs():
+            # Reproject overlay (shapefile) to source CRS (WFS)
+            reproj = processing.run(
+                "native:reprojectlayer",
+                {
+                    "INPUT": layer,
+                    "TARGET_CRS": source_crs,
+                    "OUTPUT": "memory:",
+                },
+            )
+            overlay_for_query = reproj["OUTPUT"]
+        else:
+            overlay_for_query = layer
 
-        layer_crs = layer.crs()
-
-        geom_type = QgsWkbTypes.displayString(layer.wkbType())
-
-        mem_layer = QgsVectorLayer(
-            f"{geom_type}?crs={layer_crs.authid()}",
-            f"{layer.name()} — résultat",
-            "memory",
+        # Fix possible invalid geometries in the overlay
+        fixed = processing.run(
+            "native:fixgeometries",
+            {
+                "INPUT": overlay_for_query,
+                "OUTPUT": "memory:",
+            },
         )
+        clean_overlay = fixed["OUTPUT"]
 
-        provider = mem_layer.dataProvider()
-        provider.addAttributes(layer.fields().toList())
-        mem_layer.updateFields()
+        # Extract whole features that intersect the source (keep original geometry & attributes)
+        extract = processing.run(
+            "native:extractbylocation",
+            {
+                "INPUT": clean_overlay,
+                "PREDICATE": [0],  # 0 = intersects
+                "INTERSECT": source_layer,
+                "OUTPUT": "memory:",
+            },
+        )
+        mem_layer = extract["OUTPUT"]
 
-        transform = None
-        if source_crs != layer_crs:
-            try:
-                transform = QgsCoordinateTransform(source_crs, layer_crs, project)
-            except Exception:
-                transform = None
+        # Preserve original layer name and symbology
+        mem_layer.setName(f"{layer.name()} — résultat")
+        try:
+            mem_layer.setRenderer(layer.renderer().clone())
+        except Exception:
+            pass
 
-        matches = []
-
-        for src_feat in source_features:
-            if not src_feat.hasGeometry():
-                continue
-
-            geom = QgsGeometry(src_feat.geometry())
-
-            if transform:
-                try:
-                    geom.transform(transform)
-                except Exception:
-                    continue
-
-            bbox = geom.boundingBox()
-            
-            # Met un buffer à 1 % ; désactivé sinon prend autre parcelle
-            # bbox.grow(max(bbox.width(), bbox.height()) * 0.01)
-
-            request = QgsFeatureRequest().setFilterRect(bbox)
-
-            for feat in layer.getFeatures(request):
-                if not feat.hasGeometry():
-                    continue
-
-                if geom.intersects(feat.geometry()):
-                    new_feat = QgsFeature(mem_layer.fields())
-                    new_feat.setGeometry(feat.geometry())
-                    new_feat.setAttributes(feat.attributes())
-                    matches.append(new_feat)
-
-        if matches:
-            provider.addFeatures(matches)
-            mem_layer.updateExtents()
+        # Keep only non‑empty results
+        if mem_layer.featureCount() > 0:
             results.append(mem_layer)
 
     if progress_callback:
@@ -138,6 +119,7 @@ def intersect_layer(
 
 
 # ---------------- PROJECT ---------------- #
+
 
 def add_results_to_project(result_layers: list[QgsVectorLayer]):
     project = QgsProject.instance()
