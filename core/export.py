@@ -18,6 +18,21 @@ from qgis.core import (
     QgsUnitTypes,
     QgsVectorLayer,
 )
+
+# Import helpers from geopdf_utils
+from .geopdf_utils import (
+    nettoyer_layouts,
+    creer_layout,
+    ajouter_cadre_titre,
+    ajouter_titre,
+    ajouter_echelle,
+    ajouter_fleche_nord,
+    ajouter_logo,
+    ajouter_copyright,
+    ajouter_credits_fdp,
+    _construire_legende,
+    _exporter_legende_separee,
+)
 from qgis.PyQt.QtCore import QDate, QDateTime, QPointF, QTime  # noqa: UP035
 from qgis.PyQt.QtGui import QFont, QPolygonF  # noqa: UP035
 
@@ -697,43 +712,101 @@ def export_results_to_pdf(
     output_path: str,
     progress_callback=None,
 ):
-    """Export a multi-page PDF report with enhanced layout and GeoPDF capabilities.
+    """Export a PDF (GeoPDF) report for the given result layers.
 
-    Parameters:
-        result_layers: list of QgsVectorLayer, first element should be the source layer.
-        output_path: directory or full file path for the PDF.
-        progress_callback: optional callable(current, total, name).
+    The implementation now delegates layout construction to the robust helper
+    functions defined in ``core.geopdf_utils``.
     """
     project = QgsProject.instance()
     manager = project.layoutManager()
 
-    # Resolve output path
+    # Resolve output path – create a dated filename if a directory is given
     if os.path.isdir(output_path):
-        date_H_M = datetime.strftime(datetime.now(), "%Y_%m_%d_%Hh_%Mmin")
-        filename = f"Rapport_cartographique_d_interrogation_ADS_des_parcelles_{date_H_M}.pdf"
+        date_hm = datetime.now().strftime("%Y_%m_%d_%Hh_%Mmin")
+        filename = f"Rapport_cartographique_d_interrogation_ADS_des_parcelles_{date_hm}.pdf"
         full_path = os.path.join(output_path, filename)
     else:
         full_path = output_path
+        date_hm = datetime.now().strftime("%Y_%m_%d_%Hh_%Mmin")
 
-    # Determine extent from the first result layer (source layer)
     if not result_layers:
-        raise ValueError("result_layers must contain at least the source layer for extent calculation")
+        raise ValueError("result_layers must contain at least one layer for extent calculation")
+
+    # Use the first layer to compute the map extent (with a 5 % buffer)
     src_layer = result_layers[0]
-    if isinstance(src_layer, QgsVectorLayer):
-        bbox = src_layer.extent()
-    else:
-        bbox = src_layer.boundingBox()
-
-    # Apply 5% buffer to extent
+    bbox = src_layer.extent() if isinstance(src_layer, QgsVectorLayer) else src_layer.boundingBox()
     bbox.grow(bbox.width() * 0.05 + bbox.height() * 0.05)
-
-    # Convert bbox to list for compatibility
     rec_emprise = [bbox.xMinimum(), bbox.yMinimum(), bbox.xMaximum(), bbox.yMaximum()]
+    extent_rect = QgsRectangle(*rec_emprise)
 
-    # Layer names for legend
-    layer_names = [layer.name() for layer in result_layers]
+    # Collect layer names for the legend
+    layer_names = [lyr.name() for lyr in result_layers]
 
-    # Generate the GeoPDF
-    Exports_GeoPDF(os.path.dirname(full_path), "nom de carte temporaire", project, manager, rec_emprise, layer_names)
+    # Optional progress callback – report start of heavy layout work
+    if progress_callback:
+        progress_callback(0, 1, "Export GeoPDF")
 
-    # Export is performed inside Exports_GeoPDF
+    # ---------------------------------------------------------------------
+    # Layout construction using geopdf_utils helpers
+    # ---------------------------------------------------------------------
+    nettoyer_layouts(manager)
+    layout_name = f"GeoPDF_{date_hm}"
+    layout = creer_layout(project, manager, layout_name)
+
+    # Map item
+    map_item = QgsLayoutItemMap(layout)
+    map_item.setRect(20, 20, 20, 20)
+    map_item.setExtent(extent_rect)
+    map_item.attemptMove(QgsLayoutPoint(5, 26, QgsUnitTypes.LayoutMillimeters))
+    map_item.attemptResize(QgsLayoutSize(240, 180, QgsUnitTypes.LayoutMillimeters))
+    layout.addLayoutItem(map_item)
+
+    # Title and surrounding frame
+    ajouter_titre(layout, "Rapport")
+    ajouter_cadre_titre(layout, largeur_page=295.0)
+
+    # Scale bar, north arrow, logo, copyright and credits
+    ajouter_echelle(layout, map_item, extent_rect)
+    ajouter_fleche_nord(layout)
+    ajouter_logo(layout)
+    ajouter_copyright(layout)
+    ajouter_credits_fdp(layout)
+
+    # Legend – split to external PDF if too many items
+    # Avoid using _construire_legende when QGIS iface is unavailable (headless mode)
+    if "iface" in globals() and getattr(iface, "layerTreeView", None):
+        try:
+            legend, nb_items = _construire_legende(layout, map_item, layer_names)
+        except Exception:
+            legend = None
+            nb_items = 0
+    else:
+        legend = None
+        nb_items = 0
+    seuil_legende_interne = 12
+    if nb_items >= seuil_legende_interne and legend is not None:
+        layout.removeLayoutItem(legend)
+        try:
+            _exporter_legende_separee(os.path.dirname(full_path), layer_names, nb_items, date_hm)
+        except Exception:
+            # External legend export may fail in headless environments; ignore safely
+            pass
+
+    # Export to GeoPDF
+    exporter = QgsLayoutExporter(layout)
+    exporter.layout().refresh()
+    settings = QgsLayoutExporter.PdfExportSettings()
+    # Default DPI for export
+    dpi = 300
+    settings.dpi = dpi
+    settings.writeGeoPdf = True
+    try:
+        exporter.exportToPdf(full_path, settings)
+    except Exception as e:
+        # Log the error and re‑raise for visibility; in production you might handle gracefully
+        raise RuntimeError(f"GeoPDF export failed: {e}")
+
+    # Clean up temporary layouts (optional – mirrors original behaviour)
+    nettoyer_layouts(manager)
+
+    return full_path, nb_items
