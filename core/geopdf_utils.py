@@ -35,7 +35,6 @@ from qgis.core import (
     QgsUnitTypes,
 )
 from qgis.PyQt.QtCore import QFile
-from qgis.utils import iface  # type: ignore
 
 # ──────────────────────────────────────────────
 #  Petit utilitaire de chemin vers les icônes
@@ -293,10 +292,9 @@ def _construire_legende(layout, map_item, noms_couches, x=220.0, y=25.0, filtrer
     all_layers = QgsProject.instance().mapLayers().values()
     layers_to_add = [l for l in all_layers if l.name() in noms_couches]
 
-    root = QgsLayerTree()
-    for layer in layers_to_add:
-        root.addLayer(layer)
-    legend.model().setRootGroup(root)
+    # Use the legend's layer set to limit to the desired layers
+    layer_ids = [layer.id() for layer in layers_to_add]
+    legend.setLayerSet(layer_ids)
 
     # Styles de police
     group_style = QgsLegendStyle()
@@ -315,12 +313,18 @@ def _construire_legende(layout, map_item, noms_couches, x=220.0, y=25.0, filtrer
 
     # Compter les items de légende
     nb_items = 0
-    tree_view = iface.layerTreeView()
-    model = tree_view.layerTreeModel()
     for layer in layers_to_add:
-        layer_tree_node = model.rootGroup().findLayer(layer.id())
-        if layer_tree_node:
-            nb_items += len(model.layerLegendNodes(layer_tree_node))
+        renderer = layer.renderer()
+        if renderer is None:
+            nb_items += 1
+        elif hasattr(renderer, "categories"):  # categorized
+            nb_items += len(renderer.categories())
+        elif hasattr(renderer, "ranges"):  # graduated
+            nb_items += len(renderer.ranges())
+        elif hasattr(renderer, "rules"):  # rule-based
+            nb_items += len(renderer.rootRule().children())
+        else:
+            nb_items += 1
 
     layout.addLayoutItem(legend)
     legend.setColumnSpace(35)
@@ -334,7 +338,7 @@ def _construire_legende(layout, map_item, noms_couches, x=220.0, y=25.0, filtrer
 # ──────────────────────────────────────────────
 
 
-def _exporter_legende_separee(dossier, noms_couches, nb_items, date_hm):
+def _exporter_legende_separee(dossier, noms_couches, nb_items, date_hm, extent):
     """
     Exporte la légende dans un PDF séparé dont la taille de page
     s'adapte au nombre d'items (A4, A3 ou A0).
@@ -377,8 +381,7 @@ def _exporter_legende_separee(dossier, noms_couches, nb_items, date_hm):
     # mais on le place hors de la zone visible (coordonnées négatives).
     map_item = QgsLayoutItemMap(layout)
     map_item.setRect(20, 20, 20, 20)
-    canvas = iface.mapCanvas()
-    map_item.setExtent(canvas.extent())
+    map_item.setExtent(extent)
     layout.addLayoutItem(map_item)
     map_item.attemptResize(QgsLayoutSize(1, 1, QgsUnitTypes.LayoutMillimeters))
     map_item.attemptMove(QgsLayoutPoint(-100, -100, QgsUnitTypes.LayoutMillimeters))

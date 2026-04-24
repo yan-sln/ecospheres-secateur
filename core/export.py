@@ -6,7 +6,7 @@ from datetime import datetime
 from qgis.core import (
     QgsMapLayer,
     QgsTextFormat,
-    QgsLayerTree,
+    QgsLayerTreeGroup,
     QgsLayoutExporter,
     QgsLayoutItemLabel,
     QgsLayoutItemMap,
@@ -152,7 +152,7 @@ def export_results_to_pdf(
             if tree_layer:
                 # Ensure parent groups are visible
                 parent = tree_layer.parent()
-                while parent and isinstance(parent, QgsLayerTree):
+                while parent and isinstance(parent, QgsLayerTreeGroup):
                     parent.setItemVisibilityChecked(True)
                     parent = parent.parent()
                 tree_layer.setItemVisibilityChecked(True)
@@ -170,23 +170,13 @@ def export_results_to_pdf(
             tree_layer = root.findLayer(basemap_layer.id())
             if tree_layer:
                 parent = tree_layer.parent()
-                while parent and isinstance(parent, QgsLayerTree):
+                while parent and isinstance(parent, QgsLayerTreeGroup):
                     parent.setItemVisibilityChecked(True)
                     parent = parent.parent()
                 tree_layer.setItemVisibilityChecked(True)
                 visible_count += 1
         except Exception as exc:
             logger.exception("Could not set visibility for basemap layer %s: %s", basemap_layer.name(), exc)
-
-    # Refresh canvas if possible (non‑fatal if iface unavailable)
-    try:
-        canvas = iface.mapCanvas() if "iface" in globals() else None
-        if canvas:
-            canvas.setExtent(bbox)
-            canvas.refresh()
-    except Exception as exc:
-        logger.exception("Canvas refresh failed during PDF export: %s", exc)
-        # Not fatal – continue
 
     # Layer names for the legend
     layer_names = [lyr.name() for lyr in result_layers]
@@ -225,14 +215,10 @@ def export_results_to_pdf(
 
     # Legend handling – use iface when available, otherwise skip
     nb_items = 0
-    if "iface" in globals() and getattr(iface, "layerTreeView", None):
-        try:
-            legend, nb_items = _construire_legende(layout, map_item, layer_names)
-        except Exception as e:
-            logger.error(f"Failed to build legend: {e}")
-            legend = None
-            nb_items = 0
-    else:
+    try:
+        legend, nb_items = _construire_legende(layout, map_item, layer_names)
+    except Exception as e:
+        logger.error(f"Failed to build legend: {e}")
         legend = None
         nb_items = 0
 
@@ -241,7 +227,7 @@ def export_results_to_pdf(
     if nb_items >= seuil_legende_interne and legend is not None:
         layout.removeLayoutItem(legend)
         try:
-            _exporter_legende_separee(os.path.dirname(full_path), layer_names, nb_items, date_hm)
+            _exporter_legende_separee(os.path.dirname(full_path), layer_names, nb_items, date_hm, extent_rect)
         except Exception as e:
             logger.warning(f"External legend export failed: {e}")
 
