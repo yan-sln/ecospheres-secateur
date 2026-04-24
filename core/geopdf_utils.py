@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Python 3
 
 """
@@ -15,33 +14,32 @@ from datetime import datetime
 
 from PyQt5.QtCore import QPointF
 from PyQt5.QtGui import QFont, QPolygonF
-from qgis.PyQt.QtCore import QFile
 from qgis.core import (
-    QgsProject,
-    QgsPrintLayout,
-    QgsLayoutItemMap,
+    QgsLayerTree,
+    QgsLayoutExporter,
     QgsLayoutItemLabel,
     QgsLayoutItemLegend,
-    QgsLayoutItemScaleBar,
-    QgsLayoutItemPicture,
+    QgsLayoutItemMap,
     QgsLayoutItemPage,
+    QgsLayoutItemPicture,
     QgsLayoutItemPolyline,
+    QgsLayoutItemScaleBar,
+    QgsLayoutMeasurement,
     QgsLayoutPoint,
     QgsLayoutSize,
-    QgsLayoutMeasurement,
-    QgsLayoutExporter,
-    QgsLayerTree,
-    QgsRectangle,
     QgsLegendStyle,
     QgsLineSymbol,
+    QgsPrintLayout,
+    QgsProject,
     QgsUnitTypes,
 )
+from qgis.PyQt.QtCore import QFile
 from qgis.utils import iface  # type: ignore
-
 
 # ──────────────────────────────────────────────
 #  Petit utilitaire de chemin vers les icônes
 # ──────────────────────────────────────────────
+
 
 def _icons_dir():
     """Renvoie le chemin absolu du sous-dossier icons/ du plugin."""
@@ -58,6 +56,7 @@ def get_icon_path(icon_name):
 # ──────────────────────────────────────────────
 #  Fonction interne : rectangle QPolygonF
 # ──────────────────────────────────────────────
+
 
 def _make_rectangle_polygon(x1, y1, x2, y2):
     """Crée un QPolygonF rectangulaire fermé."""
@@ -89,6 +88,7 @@ def _style_cadre():
 #  Briques élémentaires de mise en page
 # ──────────────────────────────────────────────
 
+
 def ajouter_cadre_titre(layout, largeur_page=295.0):
     """Ajoute un cadre rectangulaire autour de la zone de titre (haut de page)."""
     polygon = _make_rectangle_polygon(2.0, 2.0, largeur_page, 25.0)
@@ -98,8 +98,7 @@ def ajouter_cadre_titre(layout, largeur_page=295.0):
     return polyline
 
 
-def ajouter_titre(layout, texte, x=7.0, y=5.0,
-                  font_name="Arial", font_size=13):
+def ajouter_titre(layout, texte, x=7.0, y=5.0, font_name="Arial", font_size=13):
     """Ajoute un label de titre et ajuste sa taille au texte."""
     title = QgsLayoutItemLabel(layout)
     title.setText(texte)
@@ -131,9 +130,9 @@ def ajouter_echelle(layout, map_item, canvas_extent, x=5.0, y=195.0):
 
     # Table de seuils : (seuil_max, unité, label, taille_segment)
     _thresholds = [
-        (100,   QgsUnitTypes.DistanceMeters,     "m",  25),
-        (500,   QgsUnitTypes.DistanceMeters,     "m",  100),
-        (1000,  QgsUnitTypes.DistanceMeters,     "m",  250),
+        (100, QgsUnitTypes.DistanceMeters, "m", 25),
+        (500, QgsUnitTypes.DistanceMeters, "m", 100),
+        (1000, QgsUnitTypes.DistanceMeters, "m", 250),
         (10000, QgsUnitTypes.DistanceKilometers, "km", 0.5),
         (50000, QgsUnitTypes.DistanceKilometers, "km", 2.5),
     ]
@@ -162,8 +161,7 @@ def ajouter_fleche_nord(layout, x=275.0, y=4.0):
     return nord
 
 
-def ajouter_logo(layout, x=255.0, y=165.0, taille=30.0,
-                 icon_name="PREF_Cote_d_Or_CMJN_295_432px_Marianne.jpg"):
+def ajouter_logo(layout, x=255.0, y=165.0, taille=30.0, icon_name="PREF_Cote_d_Or_CMJN_295_432px_Marianne.jpg"):
     """Ajoute le logo de la préfecture / DDT."""
     logo = QgsLayoutItemPicture(layout)
     path = get_icon_path(icon_name)
@@ -175,12 +173,11 @@ def ajouter_logo(layout, x=255.0, y=165.0, taille=30.0,
     return logo
 
 
-def ajouter_copyright(layout, x=250.0, y=200.0,
-                      organisme="DDT21", font_size=10):
+def ajouter_copyright(layout, x=250.0, y=200.0, organisme="DDT21", font_size=10):
     """Ajoute le label de copyright avec la date du jour."""
     date_str = datetime.strftime(datetime.now(), "%d/%m/%Y")
     label = QgsLayoutItemLabel(layout)
-    label.setText("© {} le {}".format(organisme, date_str))
+    label.setText(f"© {organisme} le {date_str}")
     label.setFont(QFont("Arial", font_size))
     label.adjustSizeToText()
     layout.addLayoutItem(label)
@@ -211,6 +208,7 @@ def ajouter_credits_fdp(layout, x=250.0, y=150.0):
 #  Gestion des layouts
 # ──────────────────────────────────────────────
 
+
 def nettoyer_layouts(manager):
     """Supprime tous les layouts existants pour éviter les erreurs C++."""
     for layout in manager.printLayouts():
@@ -234,6 +232,7 @@ def creer_layout(project, manager, nom):
 # ──────────────────────────────────────────────
 #  Gestion de la visibilité des couches
 # ──────────────────────────────────────────────
+
 
 def _set_layer_visibility(nom_couche, nom_groupe, visible):
     """Allume ou éteint une couche dans un groupe donné.
@@ -304,8 +303,8 @@ def allumer_couches_concernees(rapport, noms_groupes):
 #  Légende
 # ──────────────────────────────────────────────
 
-def _construire_legende(layout, map_item, noms_couches,
-                        x=220.0, y=25.0, filtrer_par_emprise=True):
+
+def _construire_legende(layout, map_item, noms_couches, x=220.0, y=25.0, filtrer_par_emprise=True):
     """
     Construit une légende filtrée sur les couches listées.
 
@@ -358,9 +357,11 @@ def _construire_legende(layout, map_item, noms_couches,
 
     return legend, nb_items
 
+
 # ──────────────────────────────────────────────
 #  Export légende séparée
 # ──────────────────────────────────────────────
+
 
 def _exporter_legende_separee(dossier, noms_couches, nb_items, date_hm):
     """
@@ -370,7 +371,7 @@ def _exporter_legende_separee(dossier, noms_couches, nb_items, date_hm):
     project = QgsProject.instance()
     manager = project.layoutManager()
 
-    layout_name = "Legende_GeoPDF_{}".format(date_hm)
+    layout_name = f"Legende_GeoPDF_{date_hm}"
     layout = creer_layout(project, manager, layout_name)
 
     # Choisir la taille de page selon le nombre d'items
@@ -397,8 +398,7 @@ def _exporter_legende_separee(dossier, noms_couches, nb_items, date_hm):
     pc.page(0).setPageSize(page_format, orientation)
 
     # Titre
-    ajouter_titre(layout, "Ensemble des légendes du Géo-PDF :",
-                  x=10, y=7, font_size=14)
+    ajouter_titre(layout, "Ensemble des légendes du Géo-PDF :", x=10, y=7, font_size=14)
 
     # On a besoin d'un map_item configuré pour que la légende puisse
     # filtrer par emprise. On le lie au canevas courant.
@@ -413,10 +413,7 @@ def _exporter_legende_separee(dossier, noms_couches, nb_items, date_hm):
     map_item.attemptMove(QgsLayoutPoint(-100, -100, QgsUnitTypes.LayoutMillimeters))
 
     # Légende
-    legend, _ = _construire_legende(
-        layout, map_item, noms_couches,
-        x=15, y=30, filtrer_par_emprise=True
-    )
+    legend, _ = _construire_legende(layout, map_item, noms_couches, x=15, y=30, filtrer_par_emprise=True)
     legend.setColumnCount(3)
     legend.setColumnSpace(5)
 
@@ -431,7 +428,7 @@ def _exporter_legende_separee(dossier, noms_couches, nb_items, date_hm):
     settings = QgsLayoutExporter.PdfExportSettings()
     settings.dpi = 300
 
-    nom_fichier = "Legende_GeoPDF_{}.pdf".format(date_hm)
+    nom_fichier = f"Legende_GeoPDF_{date_hm}.pdf"
     chemin = os.path.join(dossier, nom_fichier)
     exporter.exportToPdf(chemin, settings)
 

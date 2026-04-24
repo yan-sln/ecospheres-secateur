@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """QGIS-native logging configuration for the ecosphères‑secateur package.
 
 This module configures a Python logger that forwards all messages to the

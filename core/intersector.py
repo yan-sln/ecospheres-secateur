@@ -1,12 +1,10 @@
+import processing  # type: ignore
 from qgis.core import (
     QgsLayerTreeGroup,
     QgsLayerTreeLayer,
     QgsProject,
     QgsVectorLayer,
 )
-import processing  # type: ignore
-from .logger import logger
-
 
 # ---------------- LAYERS ---------------- #
 
@@ -49,7 +47,6 @@ def intersect_layer(
     layers: list[QgsVectorLayer],
     progress_callback=None,
 ) -> list[QgsVectorLayer]:
-
     results = []
 
     project = QgsProject.instance()

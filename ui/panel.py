@@ -1,3 +1,4 @@
+from qgis.core import QgsProject, QgsVectorLayer
 from qgis.PyQt.QtCore import QStringListModel, Qt, QTimer
 from qgis.PyQt.QtWidgets import (
     QCompleter,
@@ -12,10 +13,8 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from qgis.core import QgsProject, QgsVectorLayer
-
 from ..core.export import export_results_to_csv, export_results_to_pdf
-from ..core.intersector import find_layers, intersect_layer, add_results_to_project
+from ..core.intersector import add_results_to_project, find_layers, intersect_layer
 
 
 class SecateurPanel(QDockWidget):

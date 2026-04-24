@@ -1,11 +1,8 @@
 import csv
-import logging
-from .logger import logger
 import os
 import re
 
 from qgis.core import (
-    QgsGeometry,
     QgsLayerTree,
     QgsLayoutExporter,
     QgsLayoutItemLabel,
@@ -14,29 +11,29 @@ from qgis.core import (
     QgsLayoutPoint,
     QgsLayoutSize,
     QgsLegendStyle,
-    QgsLineSymbol,
     QgsProject,
     QgsRectangle,
     QgsUnitTypes,
     QgsVectorLayer,
 )
+from qgis.PyQt.QtCore import QDate, QDateTime, QTime  # noqa: UP035
+from qgis.PyQt.QtGui import QFont  # noqa: UP035
 
 # Import helpers from geopdf_utils
 from .geopdf_utils import (
-    nettoyer_layouts,
-    creer_layout,
+    _construire_legende,
+    _exporter_legende_separee,
     ajouter_cadre_titre,
-    ajouter_titre,
+    ajouter_copyright,
+    ajouter_credits_fdp,
     ajouter_echelle,
     ajouter_fleche_nord,
     ajouter_logo,
-    ajouter_copyright,
-    ajouter_credits_fdp,
-    _construire_legende,
-    _exporter_legende_separee,
+    ajouter_titre,
+    creer_layout,
+    nettoyer_layouts,
 )
-from qgis.PyQt.QtCore import QDate, QDateTime, QPointF, QTime  # noqa: UP035
-from qgis.PyQt.QtGui import QFont, QPolygonF  # noqa: UP035
+from .logger import logger
 
 
 def _format_value(val):
@@ -123,6 +120,7 @@ def create_layout(project, manager, layout_name):
 
 def format_output_path(path):
     return os.path.normpath(path)
+
 
 # ============================================================
 # LEGENDE
@@ -248,6 +246,7 @@ def Export_Legende_pdf(path_name, rapport_name, project, manager, liste_couches,
 # ============================================================
 # EXPORT PRINCIPAL
 # ============================================================
+
 
 def export_results_to_pdf(
     result_layers: list[QgsVectorLayer],
