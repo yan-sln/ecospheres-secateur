@@ -1,4 +1,6 @@
 import csv
+import logging
+from .logger import logger
 import os
 import re
 
@@ -714,41 +716,44 @@ def export_results_to_pdf(
 ):
     """Export a PDF (GeoPDF) report for the given result layers.
 
-    The implementation now delegates layout construction to the robust helper
-    functions defined in ``core.geopdf_utils``.
+    Uses helper functions from ``core.geopdf_utils`` and logs actions via the
+    plugin‑wide QGIS logger.
     """
-    project = QgsProject.instance()
-    manager = project.layoutManager()
-
-    # Resolve output path – create a dated filename if a directory is given
-    if os.path.isdir(output_path):
-        date_hm = datetime.now().strftime("%Y_%m_%d_%Hh_%Mmin")
-        filename = f"Rapport_cartographique_d_interrogation_ADS_des_parcelles_{date_hm}.pdf"
-        full_path = os.path.join(output_path, filename)
-    else:
-        full_path = output_path
-        date_hm = datetime.now().strftime("%Y_%m_%d_%Hh_%Mmin")
+    # Resolve output path – create a dated filename if a directory is supplied
+    try:
+        if os.path.isdir(output_path):
+            date_hm = datetime.now().strftime("%Y_%m_%d_%Hh_%Mmin")
+            filename = f"Rapport_cartographique_d_interrogation_ADS_des_parcelles_{date_hm}.pdf"
+            full_path = os.path.join(output_path, filename)
+        else:
+            full_path = output_path
+            date_hm = datetime.now().strftime("%Y_%m_%d_%Hh_%Mmin")
+    except Exception as e:
+        logger.error(f"Failed to resolve output path '{output_path}': {e}")
+        raise
 
     if not result_layers:
         raise ValueError("result_layers must contain at least one layer for extent calculation")
 
-    # Use the first layer to compute the map extent (with a 5 % buffer)
+    # Compute map extent from the first layer (add 5 % buffer)
     src_layer = result_layers[0]
     bbox = src_layer.extent() if isinstance(src_layer, QgsVectorLayer) else src_layer.boundingBox()
     bbox.grow(bbox.width() * 0.05 + bbox.height() * 0.05)
     rec_emprise = [bbox.xMinimum(), bbox.yMinimum(), bbox.xMaximum(), bbox.yMaximum()]
     extent_rect = QgsRectangle(*rec_emprise)
 
-    # Collect layer names for the legend
+    # Layer names for the legend
     layer_names = [lyr.name() for lyr in result_layers]
 
-    # Optional progress callback – report start of heavy layout work
+    # Progress callback – signal start of heavy layout work
     if progress_callback:
         progress_callback(0, 1, "Export GeoPDF")
 
     # ---------------------------------------------------------------------
-    # Layout construction using geopdf_utils helpers
+    # Build layout using geopdf_utils helpers
     # ---------------------------------------------------------------------
+    project = QgsProject.instance()
+    manager = project.layoutManager()
     nettoyer_layouts(manager)
     layout_name = f"GeoPDF_{date_hm}"
     layout = creer_layout(project, manager, layout_name)
@@ -772,41 +777,42 @@ def export_results_to_pdf(
     ajouter_copyright(layout)
     ajouter_credits_fdp(layout)
 
-    # Legend – split to external PDF if too many items
-    # Avoid using _construire_legende when QGIS iface is unavailable (headless mode)
+    # Legend handling – use iface when available, otherwise skip
+    nb_items = 0
     if "iface" in globals() and getattr(iface, "layerTreeView", None):
         try:
             legend, nb_items = _construire_legende(layout, map_item, layer_names)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to build legend: {e}")
             legend = None
             nb_items = 0
     else:
         legend = None
         nb_items = 0
+
+    # If too many items, export legend separately and remove from main layout
     seuil_legende_interne = 12
     if nb_items >= seuil_legende_interne and legend is not None:
         layout.removeLayoutItem(legend)
         try:
             _exporter_legende_separee(os.path.dirname(full_path), layer_names, nb_items, date_hm)
-        except Exception:
-            # External legend export may fail in headless environments; ignore safely
-            pass
+        except Exception as e:
+            logger.warning(f"External legend export failed: {e}")
 
     # Export to GeoPDF
     exporter = QgsLayoutExporter(layout)
     exporter.layout().refresh()
     settings = QgsLayoutExporter.PdfExportSettings()
-    # Default DPI for export
-    dpi = 300
-    settings.dpi = dpi
+    settings.dpi = 300
     settings.writeGeoPdf = True
     try:
         exporter.exportToPdf(full_path, settings)
     except Exception as e:
-        # Log the error and re‑raise for visibility; in production you might handle gracefully
+        logger.error(f"GeoPDF export failed: {e}")
         raise RuntimeError(f"GeoPDF export failed: {e}")
 
-    # Clean up temporary layouts (optional – mirrors original behaviour)
+    # Clean up temporary layouts
     nettoyer_layouts(manager)
 
+    logger.info(f"GeoPDF exported to: {full_path}")
     return full_path, nb_items
