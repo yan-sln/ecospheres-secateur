@@ -742,6 +742,47 @@ def export_results_to_pdf(
     rec_emprise = [bbox.xMinimum(), bbox.yMinimum(), bbox.xMaximum(), bbox.yMaximum()]
     extent_rect = QgsRectangle(*rec_emprise)
 
+    # -----------------------------------------------------------------
+    # Hide all layers individually, then enable only result_layers
+    # -----------------------------------------------------------------
+    try:
+        root = QgsProject.instance().layerTreeRoot()
+        # Hide every layer in the project
+        for layer_node in root.findLayers():
+            layer_node.setItemVisibilityChecked(False)
+    except Exception as exc:
+        logger.exception("Failed to hide all layers before PDF export: %s", exc)
+        raise
+
+    visible_count = 0
+    for layer in result_layers:
+        try:
+            tree_layer = root.findLayer(layer.id())
+            if tree_layer:
+                # Ensure parent groups are visible
+                parent = tree_layer.parent()
+                while parent and isinstance(parent, QgsLayerTree):
+                    parent.setItemVisibilityChecked(True)
+                    parent = parent.parent()
+                tree_layer.setItemVisibilityChecked(True)
+                visible_count += 1
+        except Exception as exc:
+            logger.exception("Could not set visibility for layer %s: %s", layer.name(), exc)
+            # continue – a single failure should not abort the whole export
+
+    if visible_count == 0:
+        logger.warning("export_results_to_pdf called with result_layers but none could be made visible")
+
+    # Refresh canvas if possible (non‑fatal if iface unavailable)
+    try:
+        canvas = iface.mapCanvas() if "iface" in globals() else None
+        if canvas:
+            canvas.setExtent(bbox)
+            canvas.refresh()
+    except Exception as exc:
+        logger.exception("Canvas refresh failed during PDF export: %s", exc)
+        # Not fatal – continue
+
     # Layer names for the legend
     layer_names = [lyr.name() for lyr in result_layers]
 
@@ -811,6 +852,11 @@ def export_results_to_pdf(
         logger.error(f"GeoPDF export failed: {e}")
         raise RuntimeError(f"GeoPDF export failed: {e}")
 
+    # Restore all layers visibility after export
+    try:
+        root.setItemVisibilityChecked(True)
+    except Exception as exc:
+        logger.exception("Failed to restore layer visibility after PDF export: %s", exc)
     # Clean up temporary layouts
     nettoyer_layouts(manager)
 

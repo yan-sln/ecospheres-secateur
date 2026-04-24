@@ -106,7 +106,7 @@ def intersect_layer(
         mem_layer = extract["OUTPUT"]
 
         # Preserve original layer name and symbology
-        mem_layer.setName(f"{layer.name()} — résultat")
+        mem_layer.setName(f"{layer.name()} - intersect")
         try:
             mem_layer.setRenderer(layer.renderer().clone())
         except Exception:
