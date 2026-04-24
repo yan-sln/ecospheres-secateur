@@ -292,10 +292,6 @@ def _construire_legende(layout, map_item, noms_couches, x=220.0, y=25.0, filtrer
     all_layers = QgsProject.instance().mapLayers().values()
     layers_to_add = [l for l in all_layers if l.name() in noms_couches]
 
-    # Use the legend's layer set to limit to the desired layers
-    layer_ids = [layer.id() for layer in layers_to_add]
-    legend.setLayerSet(layer_ids)
-
     # Styles de police
     group_style = QgsLegendStyle()
     group_style.setFont(QFont("Arial", 7, 1, False))
