@@ -43,9 +43,10 @@ from qgis.utils import iface  # type: ignore
 
 
 def _icons_dir():
-    """Renvoie le chemin absolu du sous-dossier icons/ du plugin."""
-    basepath = os.path.dirname(os.path.realpath(__file__))
-    return os.path.join(basepath, "icons").replace("\\", "/")
+    """Renvoie le chemin absolu du dossier resources du plugin, situé à la racine du projet."""
+    # Le fichier géopdf_utils.py se trouve dans le sous‑dossier ``core`` ; le dossier ``resources`` est à la racine du dépôt
+    basepath = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
+    return os.path.join(basepath, "resources").replace("\\", "/")
 
 
 def get_icon_path(icon_name):
@@ -267,46 +268,6 @@ def _set_layer_visibility(nom_couche, nom_groupe, visible):
                         tree_layer.setItemVisibilityChecked(visible)
                 break
     return groupe, couche
-
-
-def allumer_couche(nom_couche, nom_groupe):
-    """Rend une couche visible dans un groupe donné."""
-    return _set_layer_visibility(nom_couche, nom_groupe, True)
-
-
-def eteindre_couche(nom_couche, nom_groupe):
-    """Rend une couche invisible dans un groupe donné."""
-    return _set_layer_visibility(nom_couche, nom_groupe, False)
-
-
-def eteindre_tous_les_groupes(noms_groupes):
-    """Éteint toutes les couches de tous les groupes listés."""
-    root = QgsProject.instance().layerTreeRoot()
-    for nom in noms_groupes:
-        groupe = root.findGroup(nom)
-        if groupe is None:
-            continue
-        groupe.setItemVisibilityChecked(False)
-        for child in groupe.children():
-            child.setItemVisibilityChecked(False)
-
-
-def allumer_couches_concernees(rapport, noms_groupes):
-    """Allume les couches de zonage qui intersectent au moins une parcelle.
-
-    rapport : dict avec rapport[key][5] = liste de noms de couches concernées.
-    """
-    root = QgsProject.instance().layerTreeRoot()
-    for key in rapport:
-        noms_couches_concernees = rapport[key][5]
-        for nom_groupe in noms_groupes:
-            groupe = root.findGroup(nom_groupe)
-            if groupe is None:
-                continue
-            for child in groupe.children():
-                if child.name() in noms_couches_concernees:
-                    groupe.setItemVisibilityChecked(True)
-                    child.setItemVisibilityChecked(True)
 
 
 # ──────────────────────────────────────────────
