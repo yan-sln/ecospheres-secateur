@@ -73,7 +73,7 @@ def export_results_to_csv(
     for i, layer in enumerate(result_layers):
         if not isinstance(layer, QgsVectorLayer):
             continue  # Skip non‑vector layers such as basemap
-        layer_name = layer.name().removesuffix(" — résultat")
+        layer_name = layer.name().removesuffix(" - intersect")
         if progress_callback:
             progress_callback(i, total, layer_name)
 
