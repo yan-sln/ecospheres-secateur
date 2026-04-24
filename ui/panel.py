@@ -1,4 +1,5 @@
-from qgis.core import QgsProject, QgsVectorLayer, QgsMapLayer
+from qgis.gui import QgsMapLayerComboBox
+from qgis.core import QgsProject, QgsVectorLayer, QgsMapLayer, QgsMapLayerProxyModel
 from qgis.PyQt.QtCore import QStringListModel, Qt, QTimer
 from qgis.PyQt.QtWidgets import (
     QCompleter,
@@ -74,18 +75,10 @@ class SecateurPanel(QDockWidget):
 
         # Basemap selector
         layout.addWidget(QLabel("Fond de carte :"))
-        self.basemap_search = QLineEdit()
-        self.basemap_search.setPlaceholderText("Rechercher un fond de carte…")
-        self.basemap_search.textChanged.connect(self._on_basemap_text_changed)
-        self.basemap_search.editingFinished.connect(self._on_basemap_selected)
-        # Completer for basemap layers (both vector and raster)
-        self._basemap_model = QStringListModel()
-        self._basemap_completer = QCompleter(self._basemap_model, self)
-        self._basemap_completer.setCaseSensitivity(Qt.CaseInsensitive)
-        self._basemap_completer.setFilterMode(Qt.MatchContains)
-        self._basemap_completer.activated[str].connect(self._on_basemap_selected)
-        self.basemap_search.setCompleter(self._basemap_completer)
-        layout.addWidget(self.basemap_search)
+        self.basemap_combo = QgsMapLayerComboBox()
+        self.basemap_combo.setFilters(QgsMapLayerProxyModel.RasterLayer)  # type: ignore
+        self.basemap_combo.layerChanged.connect(self._on_basemap_selected)  # type: ignore
+        layout.addWidget(self.basemap_combo)
 
         export_row = QHBoxLayout()
         self.export_csv_button = QPushButton("Exporter CSV")
@@ -119,7 +112,6 @@ class SecateurPanel(QDockWidget):
         self._all_layers = list(QgsProject.instance().mapLayers().values())
         # Populate models
         self._model.setStringList(sorted([l.name() for l in self._layers]))
-        self._basemap_model.setStringList(sorted([l.name() for l in self._all_layers]))
 
     def _on_text_changed(self, text):
         self._selected_layer = None
@@ -143,38 +135,16 @@ class SecateurPanel(QDockWidget):
                 self.run_button.setEnabled(True)
                 return
 
-    def _on_basemap_text_changed(self, text):
-        # Reset selected basemap and disable PDF button while typing
-        self._selected_basemap = None
-        self.export_pdf_button.setEnabled(False)
-        if len(text) >= 1:
-            # Simple filter for completer model
-            filtered = [l.name() for l in self._all_layers if text.lower() in l.name().lower()]
-            self._basemap_model.setStringList(sorted(filtered))
-        else:
-            # Reset to full list when empty
-            self._basemap_model.setStringList(sorted([l.name() for l in self._all_layers]))
-
-    def _on_basemap_selected(self, text=None):
-        # When triggered by editingFinished, no text argument is passed.
-        if text is None:
-            text = self.basemap_search.text()
-        if not text:
-            # No selection
+    def _on_basemap_selected(self, layer):
+        if layer is None:
             self._selected_basemap = None
             self.status_label.setText("Fond de carte non sélectionné.")
             self.export_pdf_button.setEnabled(False)
             return
-        for layer in self._all_layers:
-            if layer.name() == text:
-                self._selected_basemap = layer
-                self.status_label.setText(f"Fond de carte sélectionné : {layer.name()}")
-                self.export_pdf_button.setEnabled(True)
-                return
-        # If not found
-        self._selected_basemap = None
-        self.status_label.setText("Fond de carte non trouvé.")
-        self.export_pdf_button.setEnabled(False)
+
+        self._selected_basemap = layer
+        self.status_label.setText(f"Fond de carte sélectionné : {layer.name()}")
+        self.export_pdf_button.setEnabled(True)
 
     def _use_active_layer(self):
         layer = self.iface.activeLayer()
