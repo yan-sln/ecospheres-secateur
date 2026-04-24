@@ -3,6 +3,8 @@ import os
 import re
 
 from qgis.core import (
+    QgsMapLayer,
+    QgsTextFormat,
     QgsLayerTree,
     QgsLayoutExporter,
     QgsLayoutItemLabel,
@@ -68,6 +70,8 @@ def export_results_to_csv(
 
     written = []
     for i, layer in enumerate(result_layers):
+        if not isinstance(layer, QgsVectorLayer):
+            continue  # Skip non‑vector layers such as basemap
         layer_name = layer.name().removesuffix(" — résultat")
         if progress_callback:
             progress_callback(i, total, layer_name)
@@ -198,7 +202,10 @@ def Export_Legende_pdf(path_name, rapport_name, project, manager, liste_couches,
     # titre
     title = QgsLayoutItemLabel(layout)
     title.setText("Ensemble des légendes du Géo-PDF :")
-    title.setFont(QFont("Arial", 14))
+    # Updated to avoid deprecated setFont on QgsLayoutItemLabel
+    text_format = QgsTextFormat()
+    text_format.setFont(QFont("Arial", 14))
+    title.setTextFormat(text_format)
     layout.addLayoutItem(title)
     title.attemptMove(QgsLayoutPoint(10, 7, QgsUnitTypes.LayoutMillimeters))
     title.adjustSizeToText()
@@ -252,6 +259,7 @@ def export_results_to_pdf(
     result_layers: list[QgsVectorLayer],
     output_path: str,
     progress_callback=None,
+    basemap_layer: QgsMapLayer | None = None,
 ):
     """Export a PDF (GeoPDF) report for the given result layers.
 
@@ -311,6 +319,20 @@ def export_results_to_pdf(
 
     if visible_count == 0:
         logger.warning("export_results_to_pdf called with result_layers but none could be made visible")
+
+    # If a basemap layer is provided, make it visible as well
+    if basemap_layer is not None:
+        try:
+            tree_layer = root.findLayer(basemap_layer.id())
+            if tree_layer:
+                parent = tree_layer.parent()
+                while parent and isinstance(parent, QgsLayerTree):
+                    parent.setItemVisibilityChecked(True)
+                    parent = parent.parent()
+                tree_layer.setItemVisibilityChecked(True)
+                visible_count += 1
+        except Exception as exc:
+            logger.exception("Could not set visibility for basemap layer %s: %s", basemap_layer.name(), exc)
 
     # Refresh canvas if possible (non‑fatal if iface unavailable)
     try:

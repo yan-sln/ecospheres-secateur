@@ -15,6 +15,7 @@ from datetime import datetime
 from PyQt5.QtCore import QPointF
 from PyQt5.QtGui import QFont, QPolygonF
 from qgis.core import (
+    QgsTextFormat,
     QgsLayerTree,
     QgsLayoutExporter,
     QgsLayoutItemLabel,
@@ -102,7 +103,10 @@ def ajouter_titre(layout, texte, x=7.0, y=5.0, font_name="Arial", font_size=13):
     """Ajoute un label de titre et ajuste sa taille au texte."""
     title = QgsLayoutItemLabel(layout)
     title.setText(texte)
-    title.setFont(QFont(font_name, font_size))
+    # Updated to use setTextFormat to avoid deprecation warning
+    text_format = QgsTextFormat()
+    text_format.setFont(QFont(font_name, font_size))
+    title.setTextFormat(text_format)
     layout.addLayoutItem(title)
     title.attemptMove(QgsLayoutPoint(x, y, QgsUnitTypes.LayoutMillimeters))
     title.adjustSizeToText()
@@ -178,7 +182,10 @@ def ajouter_copyright(layout, x=250.0, y=200.0, organisme="DDT21", font_size=10)
     date_str = datetime.strftime(datetime.now(), "%d/%m/%Y")
     label = QgsLayoutItemLabel(layout)
     label.setText(f"© {organisme} le {date_str}")
-    label.setFont(QFont("Arial", font_size))
+    # Updated to use setTextFormat to avoid deprecation warning
+    text_format = QgsTextFormat()
+    text_format.setFont(QFont("Arial", font_size))
+    label.setTextFormat(text_format)
     label.adjustSizeToText()
     layout.addLayoutItem(label)
     label.attemptResize(QgsLayoutSize(40, 20, QgsUnitTypes.LayoutMillimeters))
@@ -196,7 +203,10 @@ def ajouter_credits_fdp(layout, x=250.0, y=150.0):
     )
     label = QgsLayoutItemLabel(layout)
     label.setText(texte)
-    label.setFont(QFont("Arial", 7))
+    # Updated to use setTextFormat to avoid deprecation warning
+    text_format = QgsTextFormat()
+    text_format.setFont(QFont("Arial", 7))
+    label.setTextFormat(text_format)
     label.adjustSizeToText()
     layout.addLayoutItem(label)
     label.attemptResize(QgsLayoutSize(40, 20, QgsUnitTypes.LayoutMillimeters))

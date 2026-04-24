@@ -1,4 +1,4 @@
-from qgis.core import QgsProject, QgsVectorLayer
+from qgis.core import QgsProject, QgsVectorLayer, QgsMapLayer
 from qgis.PyQt.QtCore import QStringListModel, Qt, QTimer
 from qgis.PyQt.QtWidgets import (
     QCompleter,
@@ -18,6 +18,10 @@ from ..core.intersector import add_results_to_project, find_layers, intersect_la
 
 
 class SecateurPanel(QDockWidget):
+    # Added state for basemap handling
+    _selected_basemap = None
+    _basemap_layers = []
+
     def __init__(self, iface, parent=None):
         super().__init__("Ecosphères Secateur", parent or iface.mainWindow())
         self.iface = iface
@@ -37,6 +41,7 @@ class SecateurPanel(QDockWidget):
     # ---------------- UI ---------------- #
 
     def _build_ui(self):
+        # Build the UI with source layer selector, run button, CSV export, basemap selector, and PDF export
         container = QWidget()
         layout = QVBoxLayout(container)
 
@@ -59,24 +64,40 @@ class SecateurPanel(QDockWidget):
         self.active_btn.clicked.connect(self._use_active_layer)
         layout.addWidget(self.active_btn)
 
+        # Row with Interroger button only
         btn_row = QHBoxLayout()
-
         self.run_button = QPushButton("Interroger")
         self.run_button.setEnabled(False)
         self.run_button.clicked.connect(self._on_run)
         btn_row.addWidget(self.run_button)
+        layout.addLayout(btn_row)
 
+        # Basemap selector
+        layout.addWidget(QLabel("Fond de carte :"))
+        self.basemap_search = QLineEdit()
+        self.basemap_search.setPlaceholderText("Rechercher un fond de carte…")
+        self.basemap_search.textChanged.connect(self._on_basemap_text_changed)
+        self.basemap_search.editingFinished.connect(self._on_basemap_selected)
+        # Completer for basemap layers (both vector and raster)
+        self._basemap_model = QStringListModel()
+        self._basemap_completer = QCompleter(self._basemap_model, self)
+        self._basemap_completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self._basemap_completer.setFilterMode(Qt.MatchContains)
+        self._basemap_completer.activated[str].connect(self._on_basemap_selected)
+        self.basemap_search.setCompleter(self._basemap_completer)
+        layout.addWidget(self.basemap_search)
+
+        export_row = QHBoxLayout()
         self.export_csv_button = QPushButton("Exporter CSV")
         self.export_csv_button.setEnabled(False)
         self.export_csv_button.clicked.connect(self._on_export_csv)
-        btn_row.addWidget(self.export_csv_button)
+        export_row.addWidget(self.export_csv_button)
 
         self.export_pdf_button = QPushButton("Exporter PDF")
         self.export_pdf_button.setEnabled(False)
         self.export_pdf_button.clicked.connect(self._on_export_pdf)
-        btn_row.addWidget(self.export_pdf_button)
-
-        layout.addLayout(btn_row)
+        export_row.addWidget(self.export_pdf_button)
+        layout.addLayout(export_row)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -92,8 +113,13 @@ class SecateurPanel(QDockWidget):
     # ---------------- LAYERS ---------------- #
 
     def _load_layers(self):
+        # Load vector layers for source selection
         self._layers = [l for l in QgsProject.instance().mapLayers().values() if isinstance(l, QgsVectorLayer)]
+        # Load all layers (vector + raster) for basemap selection
+        self._all_layers = list(QgsProject.instance().mapLayers().values())
+        # Populate models
         self._model.setStringList(sorted([l.name() for l in self._layers]))
+        self._basemap_model.setStringList(sorted([l.name() for l in self._all_layers]))
 
     def _on_text_changed(self, text):
         self._selected_layer = None
@@ -108,12 +134,47 @@ class SecateurPanel(QDockWidget):
         self._model.setStringList(sorted(filtered))
 
     def _on_layer_selected(self, text):
+        # Handles source layer selection (vector only)
+
         for layer in self._layers:
             if layer.name() == text:
                 self._selected_layer = layer
                 self.status_label.setText(f"Couche sélectionnée : {layer.name()}")
                 self.run_button.setEnabled(True)
                 return
+
+    def _on_basemap_text_changed(self, text):
+        # Reset selected basemap and disable PDF button while typing
+        self._selected_basemap = None
+        self.export_pdf_button.setEnabled(False)
+        if len(text) >= 1:
+            # Simple filter for completer model
+            filtered = [l.name() for l in self._all_layers if text.lower() in l.name().lower()]
+            self._basemap_model.setStringList(sorted(filtered))
+        else:
+            # Reset to full list when empty
+            self._basemap_model.setStringList(sorted([l.name() for l in self._all_layers]))
+
+    def _on_basemap_selected(self, text=None):
+        # When triggered by editingFinished, no text argument is passed.
+        if text is None:
+            text = self.basemap_search.text()
+        if not text:
+            # No selection
+            self._selected_basemap = None
+            self.status_label.setText("Fond de carte non sélectionné.")
+            self.export_pdf_button.setEnabled(False)
+            return
+        for layer in self._all_layers:
+            if layer.name() == text:
+                self._selected_basemap = layer
+                self.status_label.setText(f"Fond de carte sélectionné : {layer.name()}")
+                self.export_pdf_button.setEnabled(True)
+                return
+        # If not found
+        self._selected_basemap = None
+        self.status_label.setText("Fond de carte non trouvé.")
+        self.export_pdf_button.setEnabled(False)
 
     def _use_active_layer(self):
         layer = self.iface.activeLayer()
@@ -157,7 +218,8 @@ class SecateurPanel(QDockWidget):
             self._result_layers = results
 
             self.export_csv_button.setEnabled(True)
-            self.export_pdf_button.setEnabled(True)
+            # PDF export requires basemap selection; keep disabled until basemap chosen
+            self.export_pdf_button.setEnabled(False)
 
             layer_count = len(results)
             self._finish_progress(f"{layer_count} couches trouvées.")
@@ -177,7 +239,12 @@ class SecateurPanel(QDockWidget):
     def _on_export_pdf(self):
         folder = QFileDialog.getExistingDirectory(self, "Dossier PDF")
         if folder:
-            export_results_to_pdf(self._result_layers, folder, None)
+            export_results_to_pdf(
+                self._result_layers,
+                folder,
+                progress_callback=self._update_progress,
+                basemap_layer=self._selected_basemap,
+            )
 
     # ---------------- PROGRESS ---------------- #
 
