@@ -181,11 +181,17 @@ class SecateurPanel(QDockWidget):
     # ---------------- EXPORT ---------------- #
 
     def _on_export_csv(self):
+        # Verify that results group exists before exporting CSV
+        if not self._verify_results_group():
+            return
         folder = QFileDialog.getExistingDirectory(self, "Dossier CSV")
         if folder:
             export_results_to_csv(self._result_layers, folder)
 
     def _on_export_pdf(self):
+        # Verify that results group exists before exporting PDF
+        if not self._verify_results_group():
+            return
         folder = QFileDialog.getExistingDirectory(self, "Dossier PDF")
         if folder:
             export_results_to_pdf(
@@ -194,6 +200,20 @@ class SecateurPanel(QDockWidget):
                 progress_callback=self._update_progress,
                 basemap_layer=self._selected_basemap,
             )
+
+    def _verify_results_group(self):
+        """Check if the 'Résultats secateur' group exists.
+
+        If missing, update UI to show an error and disable export buttons.
+        Returns True when the group is present, False otherwise.
+        """
+        root = QgsProject.instance().layerTreeRoot()
+        if not root.findGroup('Résultats secateur'):
+            self.status_label.setText('Aucun résultat Sécateur à exporter.')
+            self.export_csv_button.setEnabled(False)
+            self.export_pdf_button.setEnabled(False)
+            return False
+        return True
 
     # ---------------- PROGRESS ---------------- #
 
