@@ -33,6 +33,9 @@ from qgis.core import (
     QgsPrintLayout,
     QgsProject,
     QgsUnitTypes,
+    QgsSingleSymbolRenderer,
+    QgsCategorizedSymbolRenderer,
+    QgsRenderContext
 )
 from qgis.PyQt.QtCore import QFile
 
@@ -44,16 +47,26 @@ def is_simple_fill(layer):
     renderer = layer.renderer()
     if renderer is None:
         return False
-    symbol = renderer.symbol()
-    return isinstance(symbol, QgsFillSymbol)
+    if isinstance(renderer, QgsSingleSymbolRenderer):
+        return isinstance(renderer.symbol(), QgsFillSymbol)
+    if isinstance(renderer, QgsCategorizedSymbolRenderer):
+        context = QgsRenderContext()
+        return all(isinstance(s, QgsFillSymbol) for s in renderer.symbols(context))
+    return False
 
-def set_layer_opacity(layer, opacity=0.8):
+def set_layer_opacity(layer, opacity):
     renderer = layer.renderer()
     if renderer is None:
         return
-    symbol = renderer.symbol()
-    symbol.setOpacity(opacity)
-    layer.triggerRepaint()
+    context = QgsRenderContext()
+    # Pour SingleSymbolRenderer
+    if isinstance(renderer, QgsSingleSymbolRenderer):
+        symbol = renderer.symbol()
+        symbol.setOpacity(opacity)
+    # Pour CategorizedSymbolRenderer
+    elif isinstance(renderer, QgsCategorizedSymbolRenderer):
+        for symbol in renderer.symbols(context):
+            symbol.setOpacity(opacity)
 
 # ──────────────────────────────────────────────
 #  Petit utilitaire de chemin vers les icônes
