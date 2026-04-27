@@ -41,17 +41,12 @@ class SecateurPanel(QDockWidget):
 
         #
         layout.addWidget(QLabel("Sélectionner l'objet à intersecter :"))
-
-        #
-        self.active_btn = QPushButton("Utiliser la géométrie active")
-        self.active_btn.clicked.connect(self._use_active_layer_or_feature)
-        layout.addWidget(self.active_btn)
-
-        # Row with Interroger button only
+        
+        # Row with button only
         btn_row = QHBoxLayout()
-        self.run_button = QPushButton("Interroger")
-        self.run_button.setEnabled(False)
-        self.run_button.clicked.connect(self._on_run)
+        self.run_button = QPushButton("Utiliser la géométrie active")
+        self.run_button.setEnabled(True)
+        self.run_button.clicked.connect(self._execute)
         btn_row.addWidget(self.run_button)
         layout.addLayout(btn_row)
 
@@ -173,7 +168,9 @@ class SecateurPanel(QDockWidget):
                 self.status_label.setText(
                     f"Objet ID {feature.id()} sélectionné dans {layer.name()} (couche temporaire prête)"
                 )
-                self.run_button.setEnabled(True)
+            self.run_button.setEnabled(True)
+
+
 
         elif num_selected > 1:
             # Multiple features selected
@@ -187,6 +184,19 @@ class SecateurPanel(QDockWidget):
             self._selected_feature = None
             self.status_label.setText(f"Active layer: {layer.name()}")
             self.run_button.setEnabled(True)
+
+    def _execute(self):
+        """Orchestrate active geometry selection then run the intersection with error handling."""
+        # Attempt to select the active layer or feature; UI messages are set inside the method.
+        self._use_active_layer_or_feature()
+        # If selection failed, the button remains disabled and we stop.
+        if self._selected_layer is None:
+            return
+        try:
+            self._on_run()
+        except Exception as e:
+            # Show a user‑friendly error and disable the run button to avoid repeated failures.
+            self.status_label.setText(f"Erreur d'exécution : {e}")
 
     # ---------------- PROCESS ---------------- #
 
@@ -225,6 +235,11 @@ class SecateurPanel(QDockWidget):
             self.export_csv_button.setEnabled(True)
             # PDF export requires basemap selection; keep disabled until basemap chosen
             self.export_pdf_button.setEnabled(False)
+            # Clean up the temporary "Objets créés" group if it exists
+            objs_group = _get_group_by_path(["Objets créés"])
+            if objs_group:
+                objs_group.removeAllChildren()
+                QgsProject.instance().layerTreeRoot().removeChildNode(objs_group)
 
             layer_count = max(len(results) - 1, 0)   # on enlève la couche source
             self._finish_progress(f"{layer_count} couches trouvées.")
