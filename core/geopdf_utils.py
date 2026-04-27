@@ -15,8 +15,8 @@ from datetime import datetime
 from PyQt5.QtCore import QPointF
 from PyQt5.QtGui import QFont, QPolygonF
 from qgis.core import (
+    QgsFillSymbol,
     QgsTextFormat,
-    QgsLayerTree,
     QgsLayoutExporter,
     QgsLayoutItemLabel,
     QgsLayoutItemLegend,
@@ -35,6 +35,25 @@ from qgis.core import (
     QgsUnitTypes,
 )
 from qgis.PyQt.QtCore import QFile
+
+# ──────────────────────────────────────────────
+#  Gestion de la transparence
+# ──────────────────────────────────────────────
+
+def is_simple_fill(layer):
+    renderer = layer.renderer()
+    if renderer is None:
+        return False
+    symbol = renderer.symbol()
+    return isinstance(symbol, QgsFillSymbol)
+
+def set_layer_opacity(layer, opacity=0.8):
+    renderer = layer.renderer()
+    if renderer is None:
+        return
+    symbol = renderer.symbol()
+    symbol.setOpacity(opacity)
+    layer.triggerRepaint()
 
 # ──────────────────────────────────────────────
 #  Petit utilitaire de chemin vers les icônes

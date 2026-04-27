@@ -13,7 +13,7 @@ from qgis.core import (
     QgsProject,
     QgsRectangle,
     QgsUnitTypes,
-    QgsVectorLayer,
+    QgsVectorLayer
 )
 from qgis.PyQt.QtCore import QDate, QDateTime, QTime  # noqa: UP035
 from qgis.PyQt.QtGui import QFont  # noqa: UP035
@@ -31,6 +31,8 @@ from .geopdf_utils import (
     ajouter_titre,
     creer_layout,
     nettoyer_layouts,
+    is_simple_fill,
+    set_layer_opacity
 )
 from .logger import logger
 
@@ -144,6 +146,8 @@ def export_results_to_pdf(
     visible_count = 0
     for layer in result_layers:
         try:
+            if is_simple_fill(layer):
+                set_layer_opacity(layer, opacity=0.8)
             tree_layer = root.findLayer(layer.id())
             if tree_layer:
                 # Ensure parent groups are visible
