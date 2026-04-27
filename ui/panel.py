@@ -138,6 +138,13 @@ class SecateurPanel(QDockWidget):
         if self._selected_layer is None:
             return
 
+        project = QgsProject.instance()
+        root = project.layerTreeRoot()
+        group = root.findGroup('Résultats secateur')
+        if group:
+            group.removeAllChildren()
+            root.removeChildNode(group)
+
         layers = find_layers(exclude=self._selected_layer)
 
         if not layers:
