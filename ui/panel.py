@@ -147,7 +147,7 @@ class SecateurPanel(QDockWidget):
         self._start_progress(len(layers))
 
         def progress(current, total, name):
-            self._update_progress(current, total, f"{current + 1}/{total} : {name}")
+            self._update_progress(current, total, f"{current}/{total} : {name}")
 
         results = intersect_layer(
             self._selected_layer,
@@ -163,7 +163,7 @@ class SecateurPanel(QDockWidget):
             # PDF export requires basemap selection; keep disabled until basemap chosen
             self.export_pdf_button.setEnabled(False)
 
-            layer_count = len(results)
+            layer_count = max(len(results) - 1, 0)   # on enlève la couche source
             self._finish_progress(f"{layer_count} couches trouvées.")
         else:
             self._result_layers = []
