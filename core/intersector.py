@@ -12,6 +12,27 @@ from qgis.core import (
 # ---------------- LAYERS ---------------- #
 
 
+def _get_group_by_path(path):
+    """Return the QgsLayerTreeGroup matching the hierarchical *path*.
+    *path* is a list of group names, e.g. ["Paris", "Sections"].
+    Returns ``None`` if any component is missing.
+    """
+    project = QgsProject.instance()
+    if not project:
+        return None
+
+    node = project.layerTreeRoot()
+    for name in path:
+        if not node:
+            return None
+        node = next(
+            (child for child in node.children()
+             if isinstance(child, QgsLayerTreeGroup) and child.name() == name),
+            None,
+        )
+    return node
+
+
 def find_layers(exclude: QgsVectorLayer | None = None) -> list[QgsVectorLayer]:
     project = QgsProject.instance()
     if project is None:
@@ -159,10 +180,12 @@ def add_results_to_project(result_layers: list[QgsVectorLayer]):
 
     root = project.layerTreeRoot()
 
-    group = root.findGroup("Résultats secateur")
+    # Use the shared _get_group_by_path helper to locate/create the results group
+    group = _get_group_by_path(["Résultats secateur"])
     if group:
         group.removeAllChildren()
     else:
+        # If the group does not exist, create it at the top level
         group = root.insertGroup(0, "Résultats secateur")
 
     for layer in result_layers:

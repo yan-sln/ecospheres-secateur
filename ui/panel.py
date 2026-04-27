@@ -1,13 +1,11 @@
 from qgis.gui import QgsMapLayerComboBox
-from qgis.core import QgsProject, QgsVectorLayer, QgsMapLayer, QgsMapLayerProxyModel
+from qgis.core import QgsProject, QgsVectorLayer, QgsMapLayer, QgsMapLayerProxyModel, QgsWkbTypes, QgsFeature
 from qgis.PyQt.QtCore import QStringListModel, Qt, QTimer
 from qgis.PyQt.QtWidgets import (
-    QCompleter,
     QDockWidget,
     QFileDialog,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
@@ -15,7 +13,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core.export import export_results_to_csv, export_results_to_pdf
-from ..core.intersector import add_results_to_project, find_layers, intersect_layer
+from ..core.intersector import add_results_to_project, find_layers, intersect_layer, _get_group_by_path
 
 
 class SecateurPanel(QDockWidget):
@@ -42,17 +40,11 @@ class SecateurPanel(QDockWidget):
         layout = QVBoxLayout(container)
 
         #
-        layout.addWidget(QLabel("Couche source :"))
-
-        self.layer_combo = QgsMapLayerComboBox()
-        self.layer_combo.setFilters(QgsMapLayerProxyModel.VectorLayer)  # type: ignore
-        self.layer_combo.layerChanged.connect(self._on_layer_selected)  # type: ignore
-
-        layout.addWidget(self.layer_combo)
+        layout.addWidget(QLabel("Sélectionner l'objet à intersecter :"))
 
         #
-        self.active_btn = QPushButton("Utiliser la couche active")
-        self.active_btn.clicked.connect(self._use_active_layer)
+        self.active_btn = QPushButton("Utiliser la géométrie active")
+        self.active_btn.clicked.connect(self._use_active_layer_or_feature)
         layout.addWidget(self.active_btn)
 
         # Row with Interroger button only
@@ -101,17 +93,6 @@ class SecateurPanel(QDockWidget):
         # Load all layers (vector + raster) for basemap selection
         self._all_layers = list(QgsProject.instance().mapLayers().values())
 
-    def _on_layer_selected(self, layer):
-        if layer is None:
-            self._selected_layer = None
-            self.run_button.setEnabled(False)
-            self.status_label.setText("Aucune couche sélectionnée.")
-            return
-
-        self._selected_layer = layer
-        self.status_label.setText(f"Couche sélectionnée : {layer.name()}")
-        self.run_button.setEnabled(True)
-
     def _on_basemap_selected(self, layer):
         if layer is None:
             self._selected_basemap = None
@@ -123,14 +104,89 @@ class SecateurPanel(QDockWidget):
         self.status_label.setText(f"Fond de carte sélectionné : {layer.name()}")
         self.export_pdf_button.setEnabled(True)
 
-    def _use_active_layer(self):
+    def _use_active_layer_or_feature(self):
+        """Retrieve the active vector layer or a single selected feature if exactly one is selected."""
         layer = self.iface.activeLayer()
-        if isinstance(layer, QgsVectorLayer):
+
+        # Check that the active layer exists
+        if layer is None:
+            self.status_label.setText("Aucune couche active.")
+            self.run_button.setEnabled(False)
+            return
+
+        # Check that the layer is a vector layer
+        if not isinstance(layer, QgsVectorLayer):
+            self.status_label.setText("La couche active n'est pas vectorielle.")
+            self.run_button.setEnabled(False)
+            return
+
+        selected_features = layer.selectedFeatures()
+        num_selected = len(selected_features)
+
+        if num_selected == 1:
+            # Exactly one feature selected: create a temporary memory layer with that feature
+            feature = selected_features[0]
+
+            # Crée ou réutilise une couche mémoire pour l'objet sélectionné
+            layer_name = f"{layer.name()}_feature_{feature.id()}"
+            project = QgsProject.instance()
+            # Vérifier si une couche mémoire portant ce nom existe déjà
+            existing_layers = project.mapLayersByName(layer_name)
+            if existing_layers:
+                # Réutiliser la couche existante
+                mem_layer = existing_layers[0]
+            else:
+                # Crée une nouvelle couche mémoire avec le bon type géométrique et CRS
+                geom_type = QgsWkbTypes.displayString(layer.wkbType())
+                mem_layer = QgsVectorLayer(
+                    f"{geom_type}?crs={layer.crs().authid()}",
+                    layer_name,
+                    "memory",
+                )
+
+                # Ajouter les champs de la couche source
+                mem_layer.dataProvider().addAttributes(layer.fields())
+                mem_layer.updateFields()
+
+                # Cloner la feature pour éviter tout problème de référence
+                new_feat = QgsFeature()
+                new_feat.setGeometry(feature.geometry())
+                new_feat.setAttributes(feature.attributes())
+
+                # Ajouter la feature à la couche mémoire
+                mem_layer.dataProvider().addFeature(new_feat)
+                mem_layer.updateExtents()
+
+                # Ajouter la couche au projet sans la placer à la racine
+                project.addMapLayer(mem_layer, False)
+
+                # S’assurer que le groupe "Objets créés" existe et y ajouter la couche
+                group = _get_group_by_path(["Objets créés"])
+                if group is None:
+                    root = project.layerTreeRoot()
+                    group = root.addGroup("Objets créés")
+                # Insérer la couche dans le groupe (si déjà dans le groupe, l’insérer de nouveau n’a aucun effet)
+                group.insertLayer(-1, mem_layer)
+
+                self._selected_layer = mem_layer
+                self._selected_feature = feature
+                self.status_label.setText(
+                    f"Objet ID {feature.id()} sélectionné dans {layer.name()} (couche temporaire prête)"
+                )
+                self.run_button.setEnabled(True)
+
+        elif num_selected > 1:
+            # Multiple features selected
             self._selected_layer = layer
-            self.status_label.setText(f"Couche active : {layer.name()}")
-            self.run_button.setEnabled(True)
+            self._selected_feature = None
+            self.status_label.setText(f"Plusieurs objets sélectionnés !")
+            self.run_button.setEnabled(False)
         else:
-            self.status_label.setText("Aucune couche vectorielle active.")
+            # No feature selected
+            self._selected_layer = layer
+            self._selected_feature = None
+            self.status_label.setText(f"Active layer: {layer.name()}")
+            self.run_button.setEnabled(True)
 
     # ---------------- PROCESS ---------------- #
 
