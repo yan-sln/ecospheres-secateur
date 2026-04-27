@@ -326,11 +326,17 @@ def _construire_legende(layout, map_item, noms_couches, x=220.0, y=25.0, filtrer
 
     # Styles de police
     group_style = QgsLegendStyle()
-    group_style.setFont(QFont("Arial", 7, 1, False))
+    # Updated to use setTextFormat to avoid deprecation warning
+    group_text_format = QgsTextFormat()
+    group_text_format.setFont(QFont("Arial", 7, 1, False))
+    group_style.setTextFormat(group_text_format)
     legend.setStyle(QgsLegendStyle.Group, group_style)
 
     label_style = QgsLegendStyle()
-    label_style.setFont(QFont("Arial", 6, 1, False))
+    # Updated to use setTextFormat to avoid deprecation warning
+    label_text_format = QgsTextFormat()
+    label_text_format.setFont(QFont("Arial", 6, 1, False))
+    label_style.setTextFormat(label_text_format)
     legend.setStyle(QgsLegendStyle.SymbolLabel, label_style)
 
     # Lien avec la carte et filtrage spatial
