@@ -4,6 +4,9 @@ from qgis.core import (
     QgsLayerTreeLayer,
     QgsProject,
     QgsVectorLayer,
+    QgsRasterLayer,
+    QgsProcessingFeedback,
+    QgsProcessingContext
 )
 
 # ---------------- LAYERS ---------------- #
@@ -39,24 +42,69 @@ def _collect_layers(group, out, exclude):
                 out.append(layer)
 
 
+def _reproject_layer(layer, target_crs, feedback=None, context=None):
+    """
+    Reprojette une couche (vecteur ou raster) vers target_crs.
+    Retourne une couche en mémoire (memory) avec le CRS cible.
+    """
+    if layer.crs() == target_crs:
+        return layer
+
+    context = context or QgsProcessingContext()
+    feedback = feedback or QgsProcessingFeedback()
+
+    # --- VECTEUR ---
+    if isinstance(layer, QgsVectorLayer):
+        params = {
+            'INPUT': layer,
+            'TARGET_CRS': target_crs.toWkt(),
+            'OUTPUT': 'memory:'
+        }
+        result = processing.run("native:reprojectlayer", params, context=context, feedback=feedback)
+        reprojected_layer = result['OUTPUT']
+        if isinstance(reprojected_layer, QgsVectorLayer):
+            reprojected_layer.setName(layer.name() + "_reproj")
+        if isinstance(reprojected_layer, str):
+            reprojected_layer = QgsVectorLayer(reprojected_layer, layer.name() + "_reproj", "ogr")
+        return reprojected_layer
+
+    # --- RASTER ---
+    if isinstance(layer, QgsRasterLayer):
+        params = {
+            'INPUT': layer.source(),
+            'TARGET_CRS': target_crs.toWkt(),
+            'RESAMPLING': 0,  # nearest neighbor
+            'NODATA': None,
+            'TARGET_RESOLUTION': None,
+            'OPTIONS': '',
+            'DATA_TYPE': 0,
+            'TARGET_EXTENT': None,
+            'TARGET_EXTENT_CRS': None,
+            'MULTITHREADING': True,
+            'EXTRA': '',
+            'OUTPUT': 'TEMPORARY_OUTPUT'
+        }
+        result = processing.run("gdal:warpreproject", params, context=context, feedback=feedback)
+        reprojected_layer = QgsRasterLayer(result['OUTPUT'], layer.name() + "_reproj")
+        return reprojected_layer
+
+    raise ValueError(f"Unsupported layer type: {type(layer)}")
+
 # ---------------- INTERSECTION ---------------- #
 
 
-def intersect_layer(
-    source_layer: QgsVectorLayer,
-    layers: list[QgsVectorLayer],
-    progress_callback=None,
-) -> list[QgsVectorLayer]:
+def intersect_layer(source_layer, layers, progress_callback=None):
     results = []
-
     project = QgsProject.instance()
     if project is None:
         return results
 
-    # Add source layer as special intersected object for PDF export
-    results.insert(0, source_layer)
+    # CRS du projet
+    project_crs = project.crs()
 
-    source_crs = source_layer.crs()
+    # Add source layer as first result
+    source_layer_proj = _reproject_layer(source_layer, project_crs)
+    results.append(source_layer_proj)
 
     for i, layer in enumerate(layers):
         if progress_callback:
@@ -65,51 +113,33 @@ def intersect_layer(
         if layer is None or layer == source_layer:
             continue
 
-        # Ensure both layers share the same CRS for spatial queries
-        if source_crs != layer.crs():
-            # Reproject overlay (shapefile) to source CRS (WFS)
-            reproj = processing.run(
-                "native:reprojectlayer",
-                {
-                    "INPUT": layer,
-                    "TARGET_CRS": source_crs,
-                    "OUTPUT": "memory:",
-                },
-            )
-            overlay_for_query = reproj["OUTPUT"]
-        else:
-            overlay_for_query = layer
+        # Reproject overlay to project CRS
+        overlay_for_query = _reproject_layer(layer, project_crs)
 
-        # Fix possible invalid geometries in the overlay
+        # Fix possible invalid geometries
         fixed = processing.run(
             "native:fixgeometries",
-            {
-                "INPUT": overlay_for_query,
-                "OUTPUT": "memory:",
-            },
+            {"INPUT": overlay_for_query, "OUTPUT": "memory:"},
         )
         clean_overlay = fixed["OUTPUT"]
 
-        # Extract whole features that intersect the source (keep original geometry & attributes)
+        # Extract features that intersect source_layer_proj
         extract = processing.run(
             "native:extractbylocation",
             {
                 "INPUT": clean_overlay,
-                "PREDICATE": [0],  # 0 = intersects
-                "INTERSECT": source_layer,
+                "PREDICATE": [0],  # intersects
+                "INTERSECT": source_layer_proj,
                 "OUTPUT": "memory:",
             },
         )
         mem_layer = extract["OUTPUT"]
-
-        # Preserve original layer name and symbology
         mem_layer.setName(f"{layer.name()} - intersect")
         try:
             mem_layer.setRenderer(layer.renderer().clone())
         except Exception:
             pass
 
-        # Keep only non‑empty results
         if mem_layer.featureCount() > 0:
             results.append(mem_layer)
 

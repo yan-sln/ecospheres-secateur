@@ -5,15 +5,11 @@ from datetime import datetime
 
 from qgis.core import (
     QgsMapLayer,
-    QgsTextFormat,
     QgsLayerTreeGroup,
     QgsLayoutExporter,
-    QgsLayoutItemLabel,
     QgsLayoutItemMap,
-    QgsLayoutItemPage,
     QgsLayoutPoint,
     QgsLayoutSize,
-    QgsLegendStyle,
     QgsProject,
     QgsRectangle,
     QgsUnitTypes,
@@ -237,6 +233,9 @@ def export_results_to_pdf(
     settings = QgsLayoutExporter.PdfExportSettings()
     settings.dpi = 300
     settings.writeGeoPdf = True
+    settings.forceVectorOutput = True
+    settings.exportLayersAsVectors = True
+    settings.exportMetadata = True
     try:
         exporter.exportToPdf(full_path, settings)
     except Exception as e:
