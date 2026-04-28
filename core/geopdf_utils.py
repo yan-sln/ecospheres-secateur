@@ -1,14 +1,3 @@
-# Python 3
-
-"""
-Fonctions utilitaires pour la production de GeoPDF et éléments de mise en page QGIS.
-Refactorisation du code d'origine de fonctions_lnstruction_ADS.py
-
-Objectif : regrouper tout ce qui est relatif au GeoPDF dans une seule fonction
-avec un minimum de paramètres, et factoriser les blocs répétés (échelle, flèche nord,
-cadre, logo, copyright) en sous-fonctions réutilisables.
-"""
-
 import os
 from datetime import datetime
 
@@ -33,15 +22,23 @@ from qgis.core import (
     QgsUnitTypes,
 )
 
-from .utils import creer_layout, get_icon_path
+from .utils import create_layout, get_icon_path
 
 # ──────────────────────────────────────────────
-#  Fonction interne : rectangle QPolygonF
+#  Internal function
 # ──────────────────────────────────────────────
 
 
 def _make_rectangle_polygon(x1, y1, x2, y2):
-    """Crée un QPolygonF rectangulaire fermé."""
+    """Create a closed rectangular QPolygonF from corner coordinates.
+
+    Parameters:
+        x1, y1 (float): Lower‑left corner coordinates.
+        x2, y2 (float): Upper‑right corner coordinates.
+
+    Returns:
+        QPolygonF: The rectangle polygon.
+    """
     polygon = QPolygonF()
     polygon.append(QPointF(x1, y1))
     polygon.append(QPointF(x2, y1))
@@ -51,8 +48,12 @@ def _make_rectangle_polygon(x1, y1, x2, y2):
     return polygon
 
 
-def _style_cadre():
-    """Renvoie un QgsLineSymbol pour les cadres de titre."""
+def _frame_style():
+    """Create and return a QgsLineSymbol configured for title frame borders.
+
+    Returns:
+        QgsLineSymbol: Symbol with predefined style suitable for title frames.
+    """
     props = {
         "color": "0,5,0,55",
         "width": "2.0",
@@ -67,21 +68,41 @@ def _style_cadre():
 
 
 # ──────────────────────────────────────────────
-#  Briques élémentaires de mise en page
+#  Basic layout elements
 # ──────────────────────────────────────────────
 
 
-def ajouter_cadre_titre(layout, largeur_page=295.0):
-    """Ajoute un cadre rectangulaire autour de la zone de titre (haut de page)."""
+def _add_frame_title(layout, largeur_page=295.0):
+    """Add a rectangular frame around the title area at the top of the page.
+
+    Parameters:
+        layout (QgsLayout): The layout to which the frame will be added.
+        largeur_page (float, optional): Page width in millimeters. Defaults to 295.0.
+
+    Returns:
+        QgsLayoutItemPolyline: The polyline item representing the frame.
+    """
     polygon = _make_rectangle_polygon(2.0, 2.0, largeur_page, 25.0)
     polyline = QgsLayoutItemPolyline(polygon, layout)
-    polyline.setSymbol(_style_cadre())
+    polyline.setSymbol(_frame_style())
     layout.addLayoutItem(polyline)
     return polyline
 
 
-def ajouter_titre(layout, texte, x=7.0, y=5.0, font_name="Arial", font_size=13):
-    """Ajoute un label de titre et ajuste sa taille au texte."""
+def add_title(layout, texte, x=7.0, y=5.0, font_name="Arial", font_size=13):
+    """Add a title label to the layout and adjust its size to fit the given text.
+
+    Parameters:
+        layout (QgsLayout): The layout to modify.
+        texte (str): Title text.
+        x (float, optional): X position in millimeters. Defaults to 7.0.
+        y (float, optional): Y position in millimeters. Defaults to 5.0.
+        font_name (str, optional): Font family name. Defaults to "Arial".
+        font_size (int, optional): Font size in points. Defaults to 13.
+
+    Returns:
+        QgsLayoutItemLabel: The created label item.
+    """
     title = QgsLayoutItemLabel(layout)
     title.setText(texte)
     # Updated to use setTextFormat to avoid deprecation warning
@@ -97,10 +118,18 @@ def ajouter_titre(layout, texte, x=7.0, y=5.0, font_name="Arial", font_size=13):
     return title
 
 
-def ajouter_echelle(layout, map_item, canvas_extent, x=5.0, y=195.0):
-    """
-    Ajoute une barre d'échelle adaptée automatiquement à l'étendue du canevas.
-    Remplace le bloc dupliqué dans 3 fonctions du code d'origine.
+def add_scale(layout, map_item, canvas_extent, x=5.0, y=195.0):
+    """Add a scale bar to the layout, automatically sized based on the canvas extent.
+
+    Parameters:
+        layout (QgsLayout): The layout to modify.
+        map_item (QgsLayoutItemMap): The map item to link the scale bar to.
+        canvas_extent (QgsRectangle): Extent used to determine appropriate scale.
+        x (float, optional): X position in millimeters. Defaults to 5.0.
+        y (float, optional): Y position in millimeters. Defaults to 195.0.
+
+    Returns:
+        QgsLayoutItemScaleBar: The created scale bar item.
     """
     scale_bar = QgsLayoutItemScaleBar(layout)
     scale_bar.applyDefaultSettings()
@@ -134,8 +163,17 @@ def ajouter_echelle(layout, map_item, canvas_extent, x=5.0, y=195.0):
     return scale_bar
 
 
-def ajouter_fleche_nord(layout, x=275.0, y=4.0):
-    """Ajoute la flèche Nord."""
+def add_north_arrow(layout, x=275.0, y=4.0):
+    """Add a north arrow picture to the layout.
+
+    Parameters:
+        layout (QgsLayout): The layout to modify.
+        x (float, optional): X position in millimeters. Defaults to 275.0.
+        y (float, optional): Y position in millimeters. Defaults to 4.0.
+
+    Returns:
+        QgsLayoutItemPicture: The picture item representing the north arrow.
+    """
     nord = QgsLayoutItemPicture(layout)
     path = get_icon_path("Nord.jpg")
     if path:
@@ -146,8 +184,19 @@ def ajouter_fleche_nord(layout, x=275.0, y=4.0):
     return nord
 
 
-def ajouter_logo(layout, x=255.0, y=165.0, taille=30.0, icon_name="PREF_Cote_d_Or_CMJN_295_432px_Marianne.jpg"):
-    """Ajoute le logo de la préfecture / DDT."""
+def add_logo(layout, x=255.0, y=165.0, taille=30.0, icon_name="PREF_Cote_d_Or_CMJN_295_432px_Marianne.jpg"):
+    """Add the prefecture/DDT logo picture to the layout.
+
+    Parameters:
+        layout (QgsLayout): The layout to modify.
+        x (float, optional): X position in millimeters. Defaults to 255.0.
+        y (float, optional): Y position in millimeters. Defaults to 165.0.
+        taille (float, optional): Size of the logo in millimeters (both width and height). Defaults to 30.0.
+        icon_name (str, optional): Filename of the logo icon. Defaults to "PREF_Cote_d_Or_CMJN_295_432px_Marianne.jpg".
+
+    Returns:
+        QgsLayoutItemPicture: The picture item representing the logo.
+    """
     logo = QgsLayoutItemPicture(layout)
     path = get_icon_path(icon_name)
     if path:
@@ -158,12 +207,22 @@ def ajouter_logo(layout, x=255.0, y=165.0, taille=30.0, icon_name="PREF_Cote_d_O
     return logo
 
 
-def ajouter_copyright(layout, x=250.0, y=200.0, organisme="DDT21", font_size=10):
-    """Ajoute le label de copyright avec la date du jour."""
+def add_copyright(layout, x=250.0, y=200.0, organisme="DDT21", font_size=10):
+    """Add a copyright label with the current date.
+
+    Parameters:
+        layout (QgsLayout): The layout to modify.
+        x (float, optional): X position in millimeters. Defaults to 250.0.
+        y (float, optional): Y position in millimeters. Defaults to 200.0.
+        organisme (str, optional): Organization name. Defaults to "DDT21".
+        font_size (int, optional): Font size in points. Defaults to 10.
+
+    Returns:
+        QgsLayoutItemLabel: The created label item.
+    """
     date_str = datetime.strftime(datetime.now(), "%d/%m/%Y")
     label = QgsLayoutItemLabel(layout)
     label.setText(f"© {organisme} le {date_str}")
-    # Updated to use setTextFormat to avoid deprecation warning
     text_format = QgsTextFormat()
     text_format.setFont(QFont("Arial", font_size))
     label.setTextFormat(text_format)
@@ -174,8 +233,17 @@ def ajouter_copyright(layout, x=250.0, y=200.0, organisme="DDT21", font_size=10)
     return label
 
 
-def ajouter_credits_fdp(layout, x=250.0, y=150.0):
-    """Ajoute les crédits des fonds de plan IGN."""
+def add_map_credits(layout, x=250.0, y=150.0):
+    """Add the credits for IGN map sources.
+
+    Parameters:
+        layout (QgsLayout): The layout to modify.
+        x (float, optional): X position in millimeters. Defaults to 250.0.
+        y (float, optional): Y position in millimeters. Defaults to 150.0.
+
+    Returns:
+        QgsLayoutItemLabel: The created label item containing the credits.
+    """
     texte = (
         "Sources des fonds cartographiques:\n"
         "©IGN - PCI_EXPRESS - 2022\n"
@@ -196,18 +264,23 @@ def ajouter_credits_fdp(layout, x=250.0, y=150.0):
 
 
 # ──────────────────────────────────────────────
-#  Légende
+#  Legende
 # ──────────────────────────────────────────────
 
 
-def _construire_legende(layout, map_item, noms_couches, x=220.0, y=25.0, filtrer_par_emprise=True):
-    """
-    Construit une légende filtrée sur les couches listées.
+def _make_legend(layout, map_item, noms_couches, x=220.0, y=25.0, filtrer_par_emprise=True):
+    """Construct a filtered legend for the listed layers.
 
-    map_item doit être un QgsLayoutItemMap correctement configuré
-    (avec une extent et ajouté au layout) pour que le filtrage fonctionne.
+    Parameters:
+        layout (QgsLayout): The layout to modify.
+        map_item (QgsLayoutItemMap): The map item correctly configured (with extent and added to the layout) for filtering to work.
+        noms_couches (list of str): Names of layers to include.
+        x (float, optional): X position in millimeters. Defaults to 220.0.
+        y (float, optional): Y position in millimeters. Defaults to 25.0.
+        filtrer_par_emprise (bool, optional): Whether to filter by map extent. Defaults to True.
 
-    Renvoie (legend, nb_items).
+    Returns:
+        tuple: (legend, nb_items) where legend is the QgsLayoutItemLegend and nb_items is the count of legend items.
     """
     legend = QgsLayoutItemLegend(layout)
     legend.setTitle("Legende")
@@ -261,23 +334,26 @@ def _construire_legende(layout, map_item, noms_couches, x=220.0, y=25.0, filtrer
     return legend, nb_items
 
 
-# ──────────────────────────────────────────────
-#  Export légende séparée
-# ──────────────────────────────────────────────
+def _export_separate_legend(dossier, noms_couches, nb_items, date_hm, extent):
+    """Export the legend to a separate PDF with page size adapting to the number of items (A4, A3, or A0).
 
+    Parameters:
+        dossier (str): Output directory path.
+        noms_couches (list of str): Layer names to include in the legend.
+        nb_items (int): Number of legend items, used to choose page size.
+        date_hm (str): Date and hour string for naming the file.
+        extent (QgsRectangle): Extent for a temporary map item required for filtering.
 
-def _exporter_legende_separee(dossier, noms_couches, nb_items, date_hm, extent):
-    """
-    Exporte la légende dans un PDF séparé dont la taille de page
-    s'adapte au nombre d'items (A4, A3 ou A0).
+    Returns:
+        str: Full path to the exported PDF file.
     """
     project = QgsProject.instance()
     manager = project.layoutManager()
 
     layout_name = f"Legende_GeoPDF_{date_hm}"
-    layout = creer_layout(project, manager, layout_name)
+    layout = create_layout(project, manager, layout_name)
 
-    # Choisir la taille de page selon le nombre d'items
+    # Choose page size from number of items
     if nb_items < 30:
         page_format = "A4"
         orientation = QgsLayoutItemPage.Orientation.Landscape
@@ -300,13 +376,13 @@ def _exporter_legende_separee(dossier, noms_couches, nb_items, date_hm, extent):
     pc.addPage(page)
     pc.page(0).setPageSize(page_format, orientation)
 
-    # Titre
-    ajouter_titre(layout, "Ensemble des légendes du Géo-PDF :", x=10, y=7, font_size=14)
+    # Title
+    add_title(layout, "Ensemble des légendes du Géo-PDF :", x=10, y=7, font_size=14)
 
-    # On a besoin d'un map_item configuré pour que la légende puisse
-    # filtrer par emprise. On le lie au canevas courant.
-    # Le map_item doit être dans le layout pour que setLinkedMap fonctionne,
-    # mais on le place hors de la zone visible (coordonnées négatives).
+    # We need a map_item configured so that the legend can
+    # filter by footprint. We link it to the current canvas.
+    # The map_item must be within the layout for setLinkedMap to work,
+    # but we place it outside the visible area (negative coordinates).
     map_item = QgsLayoutItemMap(layout)
     map_item.setRect(20, 20, 20, 20)
     map_item.setExtent(extent)
@@ -314,14 +390,14 @@ def _exporter_legende_separee(dossier, noms_couches, nb_items, date_hm, extent):
     map_item.attemptResize(QgsLayoutSize(1, 1, QgsUnitTypes.LayoutMillimeters))
     map_item.attemptMove(QgsLayoutPoint(-100, -100, QgsUnitTypes.LayoutMillimeters))
 
-    # Légende
-    legend, _ = _construire_legende(layout, map_item, noms_couches, x=15, y=30, filtrer_par_emprise=True)
+    # Legend
+    legend, _ = _make_legend(layout, map_item, noms_couches, x=15, y=30, filtrer_par_emprise=True)
     legend.setColumnCount(3)
     legend.setColumnSpace(5)
 
-    # Habillage
-    ajouter_logo(layout, x=x_logo, y=y_logo)
-    ajouter_copyright(layout, x=x_date, y=y_date, font_size=8)
+    # Element
+    add_logo(layout, x=x_logo, y=y_logo)
+    add_copyright(layout, x=x_date, y=y_date, font_size=8)
 
     # Export
     exporter = QgsLayoutExporter(layout)
@@ -334,7 +410,7 @@ def _exporter_legende_separee(dossier, noms_couches, nb_items, date_hm, extent):
     chemin = os.path.join(dossier, nom_fichier)
     exporter.exportToPdf(chemin, settings)
 
-    # Nettoyage de ce layout uniquement (pas les autres)
+    # Clean only this layout
     manager.removeLayout(layout)
 
     return chemin

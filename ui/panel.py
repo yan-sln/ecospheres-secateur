@@ -32,7 +32,9 @@ class SecateurPanel(QDockWidget):
         self._build_ui()
         self._load_layers()
 
-    # ---------------- UI ---------------- #
+    # ──────────────────────────────────────────────
+    #  UI construction
+    # ──────────────────────────────────────────────
 
     def _build_ui(self):
         # Build the UI with source layer selector, run button, CSV export, basemap selector, and PDF export
@@ -80,7 +82,9 @@ class SecateurPanel(QDockWidget):
         layout.addStretch()
         self.setWidget(container)
 
-    # ---------------- LAYERS ---------------- #
+    # ──────────────────────────────────────────────
+    #  Layer utilities
+    # ──────────────────────────────────────────────
 
     def _load_layers(self):
         # Load vector layers for source selection
@@ -196,7 +200,9 @@ class SecateurPanel(QDockWidget):
             # Show a user‑friendly error and disable the run button to avoid repeated failures.
             self.status_label.setText(f"Erreur d'exécution : {e}")
 
-    # ---------------- PROCESS ---------------- #
+    # ──────────────────────────────────────────────
+    #  Process execution
+    # ──────────────────────────────────────────────
 
     def _on_run(self):
         if self._selected_layer is None:
@@ -247,7 +253,9 @@ class SecateurPanel(QDockWidget):
             self.export_pdf_button.setEnabled(False)
             self._finish_progress("Aucun résultat.")
 
-    # ---------------- EXPORT ---------------- #
+    # ──────────────────────────────────────────────
+    #  Export actions
+    # ──────────────────────────────────────────────
 
     def _on_export_csv(self):
         # Verify that results group exists before exporting CSV
@@ -284,7 +292,9 @@ class SecateurPanel(QDockWidget):
             return False
         return True
 
-    # ---------------- PROGRESS ---------------- #
+    # ──────────────────────────────────────────────
+    #  Progress
+    # ──────────────────────────────────────────────
 
     def _start_progress(self, total):
         self.progress_bar.setMaximum(total)

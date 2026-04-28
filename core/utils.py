@@ -2,22 +2,22 @@ import os
 import re
 
 from qgis.core import (
+    QgsCategorizedSymbolRenderer,
+    QgsFillSymbol,
     QgsLayerTreeGroup,
     QgsLayerTreeLayer,
-    QgsProject,
-    QgsFillSymbol,
     QgsMapLayer,
-    QgsLayerTreeGroup,
     QgsPrintLayout,
-    QgsSingleSymbolRenderer,
-    QgsCategorizedSymbolRenderer,
+    QgsProject,
     QgsRenderContext,
-    QgsVectorLayer
+    QgsSingleSymbolRenderer,
+    QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QFile
-from qgis.PyQt.QtCore import QDate, QDateTime, QTime  # noqa: UP035
+from qgis.PyQt.QtCore import QDate, QDateTime, QFile, QTime  # noqa: UP035
 
-# ---------------- LAYERS ---------------- #
+# ──────────────────────────────────────────────
+#  Layer utilities
+# ──────────────────────────────────────────────
 
 
 def _get_group_by_path(path):
@@ -34,14 +34,21 @@ def _get_group_by_path(path):
         if not node:
             return None
         node = next(
-            (child for child in node.children()
-             if isinstance(child, QgsLayerTreeGroup) and child.name() == name),
+            (child for child in node.children() if isinstance(child, QgsLayerTreeGroup) and child.name() == name),
             None,
         )
     return node
 
 
 def find_layers(exclude: QgsVectorLayer | None = None) -> list[QgsVectorLayer]:
+    """Return a list of visible vector layers in the current QGIS project.
+
+    Args:
+        exclude: Optional ``QgsVectorLayer`` that will be omitted from the result.
+
+    Returns:
+        List of ``QgsVectorLayer`` instances that are visible and not excluded.
+    """
     project = QgsProject.instance()
     if project is None:
         return []
@@ -56,6 +63,13 @@ def find_layers(exclude: QgsVectorLayer | None = None) -> list[QgsVectorLayer]:
 
 
 def _collect_layers(group, out, exclude):
+    """Recursively collect visible vector layers from a layer tree group.
+
+    Args:
+        group: ``QgsLayerTreeGroup`` to traverse.
+        out: List to which found ``QgsVectorLayer`` objects are appended.
+        exclude: Optional layer to exclude from collection.
+    """
     for child in group.children():
         if isinstance(child, QgsLayerTreeGroup):
             if child.isVisible():
@@ -70,23 +84,40 @@ def _collect_layers(group, out, exclude):
             if isinstance(layer, QgsVectorLayer) and layer != exclude:
                 out.append(layer)
 
+
 # ──────────────────────────────────────────────
-#  Gestion de la transparence
+#  Transparency management
 # ──────────────────────────────────────────────
 
+
 def set_layer_opacity(layer, opacity):
+    """Set the opacity of a layer's renderer symbols.
+
+    Supports ``QgsSingleSymbolRenderer`` and ``QgsCategorizedSymbolRenderer``.
+    If the layer has no renderer, the function does nothing.
+
+    Args:
+        layer: ``QgsMapLayer`` whose symbols' opacity will be modified.
+        opacity: Float between 0 (transparent) and 1 (opaque).
+    """
     renderer = layer.renderer()
     if renderer is None:
         return
     context = QgsRenderContext()
-    # Pour SingleSymbolRenderer
+
     if isinstance(renderer, QgsSingleSymbolRenderer):
         symbol = renderer.symbol()
         symbol.setOpacity(opacity)
-    # Pour CategorizedSymbolRenderer
+
     elif isinstance(renderer, QgsCategorizedSymbolRenderer):
         for symbol in renderer.symbols(context):
             symbol.setOpacity(opacity)
+
+
+# ──────────────────────────────────────────────
+#  Visibility helpers
+# ──────────────────────────────────────────────
+
 
 def set_layer_and_parents_visible(root: QgsLayerTreeGroup, layer: QgsMapLayer) -> bool:
     """Make a layer and all its parent groups visible.
@@ -108,11 +139,11 @@ def set_layer_and_parents_visible(root: QgsLayerTreeGroup, layer: QgsMapLayer) -
 
 
 def _set_layer_visibility(nom_couche, nom_groupe, visible):
-    """Allume ou éteint une couche dans un groupe donné.
+    """Turn a layer on or off within a specified group.
 
-    Le groupe n'est allumé que si visible=True.
-    Si visible=False, seule la couche est éteinte (le groupe
-    peut contenir d'autres couches encore visibles).
+    The group is enabled only when ``visible=True``.
+    If ``visible=False``, only the layer is turned off (the group may
+    still contain other visible layers).
     """
     root = QgsProject.instance().layerTreeRoot()
     groupe = root.findGroup(nom_groupe)
@@ -131,36 +162,38 @@ def _set_layer_visibility(nom_couche, nom_groupe, visible):
                 break
     return groupe, couche
 
+
 # ──────────────────────────────────────────────
-#  Petit utilitaire de chemin vers les icônes
+#  Icon utilities
 # ──────────────────────────────────────────────
 
 
 def _icons_dir():
-    """Renvoie le chemin absolu du dossier resources du plugin, situé à la racine du projet."""
-    # Le fichier géopdf_utils.py se trouve dans le sous‑dossier ``core`` ; le dossier ``resources`` est à la racine du dépôt
+    """Return the absolute path to the plugin's resources directory located at the project root."""
+    # The file ``geopdf_utils.py`` resides in the ``core`` subdirectory; the ``resources`` folder is at the repository root
     basepath = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
     return os.path.join(basepath, "resources").replace("\\", "/")
 
 
 def get_icon_path(icon_name):
-    """Renvoie le chemin complet d'une icône si elle existe, sinon ''."""
+    """Return the full path to an icon if it exists, otherwise an empty string."""
     path = os.path.join(_icons_dir(), icon_name)
     return path if QFile.exists(path) else ""
 
+
 # ──────────────────────────────────────────────
-#  Gestion des layouts
+#  Layout management
 # ──────────────────────────────────────────────
 
 
-def nettoyer_layouts(manager):
-    """Supprime tous les layouts existants pour éviter les erreurs C++."""
+def clean_layouts(manager):
+    """Remove all existing layouts to avoid C++ errors."""
     for layout in manager.printLayouts():
         manager.removeLayout(layout)
 
 
-def creer_layout(project, manager, nom):
-    """Crée un nouveau QgsPrintLayout nommé, en supprimant tout doublon existant."""
+def create_layout(project, manager, nom):
+    """Create a new named ``QgsPrintLayout`` after removing any existing layout with the same name."""
     for layout in manager.printLayouts():
         if layout.name() == nom:
             manager.removeLayout(layout)
@@ -173,7 +206,18 @@ def creer_layout(project, manager, nom):
     return layout
 
 
+# ──────────────────────────────────────────────
+#  Renderer checks
+# ──────────────────────────────────────────────
+
+
 def is_simple_fill(layer):
+    """Determine if a layer's renderer uses only simple fill symbols.
+
+    Returns ``True`` when the layer's renderer is a ``QgsSingleSymbolRenderer``
+    with a ``QgsFillSymbol`` or a ``QgsCategorizedSymbolRenderer`` whose all
+    category symbols are ``QgsFillSymbol`` instances. Otherwise returns ``False``.
+    """
     renderer = layer.renderer()
     if renderer is None:
         return False
@@ -184,7 +228,18 @@ def is_simple_fill(layer):
         return all(isinstance(s, QgsFillSymbol) for s in renderer.symbols(context))
     return False
 
+
+# ──────────────────────────────────────────────
+#  Value formatting & Filename safety
+# ──────────────────────────────────────────────
+
+
 def _format_value(val):
+    """Format various QGIS attribute values into string representations.
+
+    Handles ``None`` (returns empty string) and QDate/QDateTime/QTime objects,
+    converting them to ISO‑like strings. Other types are returned unchanged.
+    """
     if val is None:
         return ""
     if isinstance(val, QDateTime):

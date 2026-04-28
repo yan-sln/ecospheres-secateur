@@ -16,23 +16,23 @@ from qgis.core import (
 
 # Import helpers from geopdf_utils
 from .geopdf_utils import (
-    _construire_legende,
-    _exporter_legende_separee,
-    ajouter_cadre_titre,
-    ajouter_copyright,
-    ajouter_credits_fdp,
-    ajouter_echelle,
-    ajouter_fleche_nord,
-    ajouter_logo,
-    ajouter_titre,
+    _add_frame_title,
+    _export_separate_legend,
+    _make_legend,
+    add_copyright,
+    add_logo,
+    add_map_credits,
+    add_north_arrow,
+    add_scale,
+    add_title,
 )
 from .logger import logger
 from .utils import (
     _format_value,
     _safe_filename,
-    creer_layout,
+    clean_layouts,
+    create_layout,
     is_simple_fill,
-    nettoyer_layouts,
     set_layer_and_parents_visible,
     set_layer_opacity,
 )
@@ -81,7 +81,7 @@ def export_results_to_csv(
 
 
 # ============================================================
-# EXPORT PDF
+# EXPORT GEOPDF
 # ============================================================
 
 
@@ -163,9 +163,9 @@ def export_results_to_pdf(
     # ---------------------------------------------------------------------
     project = QgsProject.instance()
     manager = project.layoutManager()
-    nettoyer_layouts(manager)
+    clean_layouts(manager)
     layout_name = f"GeoPDF_{date_hm}"
-    layout = creer_layout(project, manager, layout_name)
+    layout = create_layout(project, manager, layout_name)
 
     # Map item
     map_item = QgsLayoutItemMap(layout)
@@ -176,20 +176,20 @@ def export_results_to_pdf(
     layout.addLayoutItem(map_item)
 
     # Title and surrounding frame
-    ajouter_titre(layout, "Rapport")
-    ajouter_cadre_titre(layout, largeur_page=295.0)
+    add_title(layout, "Rapport")
+    _add_frame_title(layout, largeur_page=295.0)
 
     # Scale bar, north arrow, logo, copyright and credits
-    ajouter_echelle(layout, map_item, extent_rect)
-    ajouter_fleche_nord(layout)
-    ajouter_logo(layout)
-    ajouter_copyright(layout)
-    ajouter_credits_fdp(layout)
+    add_scale(layout, map_item, extent_rect)
+    add_north_arrow(layout)
+    add_logo(layout)
+    add_copyright(layout)
+    add_map_credits(layout)
 
     # Legend handling – use iface when available, otherwise skip
     nb_items = 0
     try:
-        legend, nb_items = _construire_legende(layout, map_item, layer_names)
+        legend, nb_items = _make_legend(layout, map_item, layer_names)
     except Exception as e:
         logger.error(f"Failed to build legend: {e}")
         legend = None
@@ -200,7 +200,7 @@ def export_results_to_pdf(
     if nb_items >= seuil_legende_interne and legend is not None:
         layout.removeLayoutItem(legend)
         try:
-            _exporter_legende_separee(os.path.dirname(full_path), layer_names, nb_items, date_hm, extent_rect)
+            _export_separate_legend(os.path.dirname(full_path), layer_names, nb_items, date_hm, extent_rect)
         except Exception as e:
             logger.warning(f"External legend export failed: {e}")
 
@@ -225,7 +225,7 @@ def export_results_to_pdf(
     except Exception as exc:
         logger.exception("Failed to restore layer visibility after PDF export: %s", exc)
     # Clean up temporary layouts
-    nettoyer_layouts(manager)
+    clean_layouts(manager)
 
     logger.info(f"GeoPDF exported to: {full_path}")
     return full_path, nb_items

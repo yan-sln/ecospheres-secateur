@@ -3,7 +3,9 @@ from qgis.core import QgsProcessingContext, QgsProcessingFeedback, QgsProject, Q
 
 from .utils import _get_group_by_path
 
-# ---------------- LAYERS ---------------- #
+# ──────────────────────────────────────────────
+#  LAYERS
+# ──────────────────────────────────────────────
 
 
 def _reproject_layer(layer, target_crs, feedback=None, context=None):
@@ -51,7 +53,9 @@ def _reproject_layer(layer, target_crs, feedback=None, context=None):
     raise ValueError(f"Unsupported layer type: {type(layer)}")
 
 
-# ---------------- INTERSECTION ---------------- #
+# ──────────────────────────────────────────────
+#  INTERSECTION
+# ──────────────────────────────────────────────
 
 
 def intersect_layer(source_layer, layers, progress_callback=None):
@@ -110,7 +114,9 @@ def intersect_layer(source_layer, layers, progress_callback=None):
     return results
 
 
-# ---------------- PROJECT ---------------- #
+# ──────────────────────────────────────────────
+#  PROJECT
+# ──────────────────────────────────────────────
 
 
 def add_results_to_project(result_layers: list[QgsVectorLayer]):
