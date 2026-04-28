@@ -89,6 +89,33 @@ def _add_frame_title(layout, largeur_page=295.0):
     return polyline
 
 
+def ajouter_label(layout, texte, x, y, font_name="Arial", font_size=10):
+    """Create a generic QgsLayoutItemLabel.
+
+    Parameters
+    ----------
+    layout: QgsLayout
+        Layout to which the label is added.
+    texte: str
+        Text to display.
+    x, y: float
+        Position in millimeters.
+    font_name: str, optional
+        Font family, default "Arial".
+    font_size: int, optional
+        Font size in points, default 10.
+    """
+    label = QgsLayoutItemLabel(layout)
+    label.setText(texte)
+    text_format = QgsTextFormat()
+    text_format.setFont(QFont(font_name, font_size))
+    label.setTextFormat(text_format)
+    label.adjustSizeToText()
+    layout.addLayoutItem(label)
+    label.attemptMove(QgsLayoutPoint(x, y, QgsUnitTypes.LayoutMillimeters))
+    return label
+
+
 def add_title(layout, texte, x=7.0, y=5.0, font_name="Arial", font_size=13):
     """Add a title label to the layout and adjust its size to fit the given text.
 
@@ -103,19 +130,11 @@ def add_title(layout, texte, x=7.0, y=5.0, font_name="Arial", font_size=13):
     Returns:
         QgsLayoutItemLabel: The created label item.
     """
-    title = QgsLayoutItemLabel(layout)
-    title.setText(texte)
-    # Updated to use setTextFormat to avoid deprecation warning
-    text_format = QgsTextFormat()
-    text_format.setFont(QFont(font_name, font_size))
-    title.setTextFormat(text_format)
-    layout.addLayoutItem(title)
-    title.attemptMove(QgsLayoutPoint(x, y, QgsUnitTypes.LayoutMillimeters))
-    title.adjustSizeToText()
-    w = x + title.boundingRect().width()
-    h = y + title.boundingRect().height()
-    title.attemptResize(QgsLayoutSize(w, h))
-    return title
+    label = ajouter_label(layout, texte, x, y, font_name, font_size)
+    w = x + label.boundingRect().width()
+    h = y + label.boundingRect().height()
+    label.attemptResize(QgsLayoutSize(w, h, QgsUnitTypes.LayoutMillimeters))
+    return label
 
 
 def add_scale(layout, map_item, canvas_extent, x=5.0, y=195.0):
@@ -221,15 +240,9 @@ def add_copyright(layout, x=250.0, y=200.0, organisme="DDT21", font_size=10):
         QgsLayoutItemLabel: The created label item.
     """
     date_str = datetime.strftime(datetime.now(), "%d/%m/%Y")
-    label = QgsLayoutItemLabel(layout)
-    label.setText(f"© {organisme} le {date_str}")
-    text_format = QgsTextFormat()
-    text_format.setFont(QFont("Arial", font_size))
-    label.setTextFormat(text_format)
-    label.adjustSizeToText()
-    layout.addLayoutItem(label)
+    texte = f"© {organisme} le {date_str}"
+    label = ajouter_label(layout, texte, x, y, font_name="Arial", font_size=font_size)
     label.attemptResize(QgsLayoutSize(40, 20, QgsUnitTypes.LayoutMillimeters))
-    label.attemptMove(QgsLayoutPoint(x, y, QgsUnitTypes.LayoutMillimeters))
     return label
 
 
@@ -250,16 +263,8 @@ def add_map_credits(layout, x=250.0, y=150.0):
         "©IGN - SCAN25® Version 1\n"
         "©IGN - BDORTHO® - PVA 2018"
     )
-    label = QgsLayoutItemLabel(layout)
-    label.setText(texte)
-    # Updated to use setTextFormat to avoid deprecation warning
-    text_format = QgsTextFormat()
-    text_format.setFont(QFont("Arial", 7))
-    label.setTextFormat(text_format)
-    label.adjustSizeToText()
-    layout.addLayoutItem(label)
+    label = ajouter_label(layout, texte, x, y, font_name="Arial", font_size=7)
     label.attemptResize(QgsLayoutSize(40, 20, QgsUnitTypes.LayoutMillimeters))
-    label.attemptMove(QgsLayoutPoint(x, y, QgsUnitTypes.LayoutMillimeters))
     return label
 
 
