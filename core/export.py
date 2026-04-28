@@ -35,6 +35,7 @@ from .utils import (
     is_simple_fill,
     set_layer_and_parents_visible,
     set_layer_opacity,
+    temporary_visibility,
 )
 
 # ============================================================
@@ -122,108 +123,99 @@ def export_results_to_pdf(
     # -----------------------------------------------------------------
     # Hide all layers individually, then enable only result_layers
     # -----------------------------------------------------------------
-    try:
-        root = QgsProject.instance().layerTreeRoot()
-        # Hide every layer in the project
-        for layer_node in root.findLayers():
-            layer_node.setItemVisibilityChecked(False)
-    except Exception as exc:
-        logger.exception("Failed to hide all layers before PDF export: %s", exc)
-        raise
+    root = QgsProject.instance().layerTreeRoot()
+    # Hide all layers using temporary_visibility context manager; restoration is automatic
 
-    visible_count = 0
-    for layer in result_layers:
-        try:
-            if is_simple_fill(layer):
-                set_layer_opacity(layer, opacity=0.8)
-            visible_count += int(set_layer_and_parents_visible(root, layer))
-        except Exception as exc:
-            logger.exception("Could not set visibility for layer %s: %s", layer.name(), exc)
-            # continue – a single failure should not abort the whole export
+    with temporary_visibility(root):
+        visible_count = 0
+        for layer in result_layers:
+            try:
+                if is_simple_fill(layer):
+                    set_layer_opacity(layer, opacity=0.8)
+                visible_count += int(set_layer_and_parents_visible(root, layer))
+            except Exception as exc:
+                logger.exception("Could not set visibility for layer %s: %s", layer.name(), exc)
+                # continue – a single failure should not abort the whole export
 
-    if visible_count == 0:
-        logger.warning("export_results_to_pdf called with result_layers but none could be made visible")
+        if visible_count == 0:
+            logger.warning("export_results_to_pdf called with result_layers but none could be made visible")
 
-    # If a basemap layer is provided, make it visible as well
-    if basemap_layer is not None:
-        try:
-            visible_count += int(set_layer_and_parents_visible(root, basemap_layer))
-        except Exception as exc:
-            logger.exception("Could not set visibility for basemap layer %s: %s", basemap_layer.name(), exc)
+        # If a basemap layer is provided, make it visible as well
+        if basemap_layer is not None:
+            try:
+                visible_count += int(set_layer_and_parents_visible(root, basemap_layer))
+            except Exception as exc:
+                logger.exception("Could not set visibility for basemap layer %s: %s", basemap_layer.name(), exc)
 
-    # Layer names for the legend
-    layer_names = [lyr.name() for lyr in result_layers]
+        # Layer names for the legend
+        layer_names = [lyr.name() for lyr in result_layers]
 
-    # Progress callback – signal start of heavy layout work
-    if progress_callback:
-        progress_callback(0, 1, "Export GeoPDF")
+        # Progress callback – signal start of heavy layout work
+        if progress_callback:
+            progress_callback(0, 1, "Export GeoPDF")
 
-    # ---------------------------------------------------------------------
-    # Build layout using geopdf_utils helpers
-    # ---------------------------------------------------------------------
-    project = QgsProject.instance()
-    manager = project.layoutManager()
-    clean_layouts(manager)
-    layout_name = f"GeoPDF_{date_hm}"
-    layout = create_layout(project, manager, layout_name)
+        # ---------------------------------------------------------------------
+        # Build layout using geopdf_utils helpers
+        # ---------------------------------------------------------------------
+        project = QgsProject.instance()
+        manager = project.layoutManager()
+        clean_layouts(manager)
+        layout_name = f"GeoPDF_{date_hm}"
+        layout = create_layout(project, manager, layout_name)
 
-    # Map item
-    map_item = QgsLayoutItemMap(layout)
-    map_item.setRect(20, 20, 20, 20)
-    map_item.setExtent(extent_rect)
-    map_item.attemptMove(QgsLayoutPoint(5, 26, QgsUnitTypes.LayoutMillimeters))
-    map_item.attemptResize(QgsLayoutSize(240, 180, QgsUnitTypes.LayoutMillimeters))
-    layout.addLayoutItem(map_item)
+        # Map item
+        map_item = QgsLayoutItemMap(layout)
+        map_item.setRect(20, 20, 20, 20)
+        map_item.setExtent(extent_rect)
+        map_item.attemptMove(QgsLayoutPoint(5, 26, QgsUnitTypes.LayoutMillimeters))
+        map_item.attemptResize(QgsLayoutSize(240, 180, QgsUnitTypes.LayoutMillimeters))
+        layout.addLayoutItem(map_item)
 
-    # Title and surrounding frame
-    add_title(layout, "Rapport")
-    _add_frame_title(layout, largeur_page=295.0)
+        # Title and surrounding frame
+        add_title(layout, "Rapport")
+        _add_frame_title(layout, largeur_page=295.0)
 
-    # Scale bar, north arrow, logo, copyright and credits
-    add_scale(layout, map_item, extent_rect)
-    add_north_arrow(layout)
-    add_logo(layout)
-    add_copyright(layout)
-    add_map_credits(layout)
+        # Scale bar, north arrow, logo, copyright and credits
+        add_scale(layout, map_item, extent_rect)
+        add_north_arrow(layout)
+        add_logo(layout)
+        add_copyright(layout)
+        add_map_credits(layout)
 
-    # Legend handling – use iface when available, otherwise skip
-    nb_items = 0
-    try:
-        legend, nb_items = _make_legend(layout, map_item, layer_names)
-    except Exception as e:
-        logger.error(f"Failed to build legend: {e}")
-        legend = None
+        # Legend handling – use iface when available, otherwise skip
         nb_items = 0
-
-    # If too many items, export legend separately and remove from main layout
-    seuil_legende_interne = 12
-    if nb_items >= seuil_legende_interne and legend is not None:
-        layout.removeLayoutItem(legend)
         try:
-            _export_separate_legend(os.path.dirname(full_path), layer_names, nb_items, date_hm, extent_rect)
+            legend, nb_items = _make_legend(layout, map_item, layer_names)
         except Exception as e:
-            logger.warning(f"External legend export failed: {e}")
+            logger.error(f"Failed to build legend: {e}")
+            legend = None
+            nb_items = 0
 
-    # Export to GeoPDF
-    exporter = QgsLayoutExporter(layout)
-    exporter.layout().refresh()
-    settings = QgsLayoutExporter.PdfExportSettings()
-    settings.dpi = 300
-    settings.writeGeoPdf = True
-    settings.forceVectorOutput = True
-    settings.exportLayersAsVectors = True
-    settings.exportMetadata = True
-    try:
-        exporter.exportToPdf(full_path, settings)
-    except Exception as e:
-        logger.error(f"GeoPDF export failed: {e}")
-        raise RuntimeError(f"GeoPDF export failed: {e}") from e
+        # If too many items, export legend separately and remove from main layout
+        seuil_legende_interne = 12
+        if nb_items >= seuil_legende_interne and legend is not None:
+            layout.removeLayoutItem(legend)
+            try:
+                _export_separate_legend(os.path.dirname(full_path), layer_names, nb_items, date_hm, extent_rect)
+            except Exception as e:
+                logger.warning(f"External legend export failed: {e}")
 
-    # Restore all layers visibility after export
-    try:
-        root.setItemVisibilityChecked(True)
-    except Exception as exc:
-        logger.exception("Failed to restore layer visibility after PDF export: %s", exc)
+        # Export to GeoPDF
+        exporter = QgsLayoutExporter(layout)
+        exporter.layout().refresh()
+        settings = QgsLayoutExporter.PdfExportSettings()
+        settings.dpi = 300
+        settings.writeGeoPdf = True
+        settings.forceVectorOutput = True
+        settings.exportLayersAsVectors = True
+        settings.exportMetadata = True
+        try:
+            exporter.exportToPdf(full_path, settings)
+        except Exception as e:
+            logger.error(f"GeoPDF export failed: {e}")
+            raise RuntimeError(f"GeoPDF export failed: {e}") from e
+
+
     # Clean up temporary layouts
     clean_layouts(manager)
 

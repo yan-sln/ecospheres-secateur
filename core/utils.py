@@ -1,6 +1,7 @@
 import os
 import re
 
+from contextlib import contextmanager
 from qgis.core import (
     QgsCategorizedSymbolRenderer,
     QgsFillSymbol,
@@ -139,7 +140,23 @@ def set_layer_opacity(layer, opacity):
 # ──────────────────────────────────────────────
 #  Visibility helpers
 # ──────────────────────────────────────────────
+@contextmanager
+def temporary_visibility(root):
+    """Hide all layers for the duration of the context.
 
+    All layers are set to invisible when entering the context. Visibility
+    changes made inside the block (e.g., making result layers visible) are
+    retained after exiting; no restoration is performed.
+    """
+    # Hide every layer
+    for node in root.findLayers():
+        node.setItemVisibilityChecked(False)
+    try:
+        yield
+    finally:
+        # Intentionally do not restore original visibility to keep the
+        # visibility state set within the context (result layers remain visible).
+        pass
 
 def set_layer_and_parents_visible(root: QgsLayerTreeGroup, layer: QgsMapLayer) -> bool:
     """Make a layer and all its parent groups visible.

@@ -233,6 +233,8 @@ class SecateurPanel(QDockWidget):
             self.export_pdf_button.setEnabled(False)
             # Clean up the temporary "Objets créés" group if it exists
             objs_group = get_or_create_group(["Objets créés"], clear=True)
+            if objs_group:
+                QgsProject.instance().layerTreeRoot().removeChildNode(objs_group)
             layer_count = max(len(results) - 1, 0)  # on enlève la couche source
             self._finish_progress(f"{layer_count} couches trouvées.")
         else:
