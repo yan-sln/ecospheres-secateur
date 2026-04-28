@@ -3,7 +3,7 @@ from contextlib import suppress
 import processing  # type: ignore
 from qgis.core import QgsProcessingContext, QgsProcessingFeedback, QgsProject, QgsRasterLayer, QgsVectorLayer
 
-from .utils import Progress, get_or_create_group
+from .utils import Progress, get_results_group
 
 # ──────────────────────────────────────────────
 #  LAYERS
@@ -124,7 +124,7 @@ def add_results_to_project(result_layers: list[QgsVectorLayer]):
     if project is None:
         return
 
-    group = get_or_create_group(["Résultats secateur"], clear=True)
+    group = get_results_group(clear=True)
 
     for layer in result_layers:
         project.addMapLayer(layer, False)

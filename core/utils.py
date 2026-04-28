@@ -32,14 +32,13 @@ def get_or_create_group(path: list[str], clear: bool = False):
     if not project:
         return None
 
-    # Try to locate the group via the existing helper (which may have been removed,
-    # so we perform a manual traversal here).
     node = project.layerTreeRoot()
     for name in path:
         if not node:
             return None
         node = next(
-            (child for child in node.children() if isinstance(child, QgsLayerTreeGroup) and child.name() == name), None
+            (child for child in node.children() if isinstance(child, QgsLayerTreeGroup) and child.name() == name),
+            None,
         )
         if node is None:
             break
@@ -48,7 +47,6 @@ def get_or_create_group(path: list[str], clear: bool = False):
     if group is None:
         root = project.layerTreeRoot()
         if len(path) > 1:
-            # Ensure parent hierarchy exists recursively
             parent_path = path[:-1]
             parent_group = get_or_create_group(parent_path, clear=False)
             if parent_group is None:
@@ -61,6 +59,33 @@ def get_or_create_group(path: list[str], clear: bool = False):
         group.removeAllChildren()
 
     return group
+
+
+# ---------------------------------------------------------------------------
+# Group helpers (DRY wrappers)
+# ---------------------------------------------------------------------------
+from .constants import CREATED_OBJECTS_GROUP_NAME, RESULT_GROUP_NAME
+
+
+def _get_root():
+    """Return the layer tree root of the current QGIS project."""
+    return QgsProject.instance().layerTreeRoot()
+
+
+def get_results_group(clear: bool = False):
+    """Return the "Résultats secateur" group, creating it if necessary.
+    Pass ``clear=True`` to empty the group before returning.
+    """
+    # Ensure group exists via get_or_create_group helper
+    return get_or_create_group([RESULT_GROUP_NAME], clear=clear)
+
+
+def get_created_objects_group(clear: bool = False):
+    """Return the "Objets créés" group, creating it if necessary.
+    Pass ``clear=True`` to empty the group before returning.
+    """
+    # Ensure group exists via get_or_create_group helper
+    return get_or_create_group([CREATED_OBJECTS_GROUP_NAME], clear=clear)
 
 
 def find_layers(exclude: QgsVectorLayer | None = None) -> list[QgsVectorLayer]:

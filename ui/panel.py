@@ -14,7 +14,7 @@ from qgis.PyQt.QtWidgets import (
 from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.intersector import add_results_to_project, intersect_layer
 from ..core.logger import logger
-from ..core.utils import Progress, find_layers, get_or_create_group
+from ..core.utils import Progress, find_layers, get_created_objects_group, get_results_group
 
 
 class SecateurPanel(QDockWidget):
@@ -172,7 +172,7 @@ class SecateurPanel(QDockWidget):
                 project.addMapLayer(mem_layer, False)
 
                 # S’assurer que le groupe "Objets créés" existe et y ajouter la couche
-                group = get_or_create_group(["Objets créés"])
+                group = get_created_objects_group()
                 # Insérer la couche dans le groupe (si déjà dans le groupe, l’insérer de nouveau n’a aucun effet)
                 group.insertLayer(-1, mem_layer)
 
@@ -212,7 +212,7 @@ class SecateurPanel(QDockWidget):
             return
 
         # Ensure the results group exists and is empty
-        group = get_or_create_group(["Résultats secateur"], clear=True)
+        group = get_results_group(clear=True)
 
         layers = find_layers(exclude=self._selected_layer)
         if not layers:
@@ -235,7 +235,7 @@ class SecateurPanel(QDockWidget):
             # PDF export requires basemap selection; keep disabled until basemap chosen
             self._set_export_enabled(csv=True, pdf=False)
             # Clean up the temporary "Objets créés" group if it exists
-            objs_group = get_or_create_group(["Objets créés"], clear=True)
+            objs_group = get_created_objects_group(clear=True)
             if objs_group:
                 QgsProject.instance().layerTreeRoot().removeChildNode(objs_group)
             layer_count = max(len(results) - 1, 0)  # on enlève la couche source
@@ -276,8 +276,9 @@ class SecateurPanel(QDockWidget):
         If missing, update UI to show an error and disable export buttons.
         Returns True when the group is present, False otherwise.
         """
-        root = QgsProject.instance().layerTreeRoot()
-        if not root.findGroup("Résultats secateur"):
+        # Use the DRY helper to locate the results group
+        group = get_results_group()
+        if not group:
             self._set_status("Aucun résultat Sécateur à exporter.", level="error")
             self._set_export_enabled(csv=False, pdf=False)
             return False
