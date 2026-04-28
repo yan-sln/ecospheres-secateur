@@ -34,6 +34,7 @@ from .utils import (
     clean_layouts,
     create_layout,
     is_simple_fill,
+    iterate_layers,
     set_layer_and_parents_visible,
     set_layer_opacity,
     temporary_visibility,
@@ -58,26 +59,28 @@ def export_results_to_csv(
     total = len(result_layers)
 
     written = []
-    for i, layer in enumerate(result_layers):
-        if not isinstance(layer, QgsVectorLayer):
-            continue  # Skip non‑vector layers such as basemap
-        layer_name = layer.name().removesuffix(" - intersect")
-        if progress:
-            progress.update(i, total, layer_name)
 
+    def _write_csv(layer: QgsVectorLayer):
+        """Callback used by :func:`iterate_layers` to write one CSV file.
+
+        Skips non‑vector layers to preserve existing behaviour.
+        """
+        if not isinstance(layer, QgsVectorLayer):
+            return
+        layer_name = layer.name().removesuffix(" - intersect")
         filename = _safe_filename(layer_name) + ".csv"
         filepath = os.path.join(output_dir, filename)
 
         field_names = [field.name() for field in layer.fields()]
-
         with open(filepath, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(field_names)
             for feat in layer.getFeatures():
-                row = [_format_value(v) for v in feat.attributes()]
-                writer.writerow(row)
+                writer.writerow([_format_value(v) for v in feat.attributes()])
 
         written.append(filepath)
+
+    iterate_layers(result_layers, _write_csv, progress)
 
     return written
 
@@ -128,7 +131,13 @@ def export_results_to_pdf(
     # Hide all layers using temporary_visibility context manager; no restoration
     with temporary_visibility(root):
         visible_count = 0
-        for layer in result_layers:
+
+        def _make_visible(layer):
+            """Callback for :func:`iterate_layers` to set opacity and visibility.
+
+            Updates the outer ``visible_count`` variable.
+            """
+            nonlocal visible_count
             try:
                 if is_simple_fill(layer):
                     set_layer_opacity(layer, opacity=0.8)
@@ -136,6 +145,8 @@ def export_results_to_pdf(
             except Exception as exc:
                 logger.exception("Could not set visibility for layer %s: %s", layer.name(), exc)
                 # continue – a single failure should not abort the whole export
+
+        iterate_layers(result_layers, _make_visible, progress)
 
         if visible_count == 0:
             logger.warning("export_results_to_pdf called with result_layers but none could be made visible")

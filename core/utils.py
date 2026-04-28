@@ -212,8 +212,7 @@ class Progress:
     """Lightweight wrapper for a progress callback.
 
     The stored ``callback`` must accept three positional arguments:
-    ``current`` (int), ``total`` (int) and ``label`` (str).  If ``callback``
-    is ``None`` the :meth:`update` method becomes a no‑op, mirroring the
+    ``current`` (int), ``total`` (int) and ``label`` (str).  If ``callback`` is ``None`` the :meth:`update` method becomes a no‑op, mirroring the
     previous ``if progress_callback:`` guards throughout the codebase.
     """
 
@@ -234,6 +233,25 @@ class Progress:
         """
         if self.callback:
             self.callback(current, total, label)
+
+
+# ──────────────────────────────────────────────
+#  Iteration helper
+# ──────────────────────────────────────────────
+
+
+def iterate_layers(layers, callback, progress=None):
+    """Iterate over *layers* and apply *callback* to each.
+
+    ``progress`` – optional :class:`Progress` instance.  If provided, its
+    ``update`` method is called with ``(index, total, layer.name())`` before
+    invoking the callback.
+    """
+    total = len(layers)
+    for i, layer in enumerate(layers):
+        if progress:
+            progress.update(i, total, layer.name())
+        callback(layer)
 
 
 # ──────────────────────────────────────────────
