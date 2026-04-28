@@ -128,4 +128,4 @@ def add_results_to_project(result_layers: list[QgsVectorLayer]):
 
     for layer in result_layers:
         project.addMapLayer(layer, False)
-        group.addLayer(layer)  #type: ignore
+        group.addLayer(layer)  # type: ignore

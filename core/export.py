@@ -124,8 +124,7 @@ def export_results_to_pdf(
     # Hide all layers individually, then enable only result_layers
     # -----------------------------------------------------------------
     root = QgsProject.instance().layerTreeRoot()
-    # Hide all layers using temporary_visibility context manager; restoration is automatic
-
+    # Hide all layers using temporary_visibility context manager; no restoration
     with temporary_visibility(root):
         visible_count = 0
         for layer in result_layers:
@@ -214,7 +213,6 @@ def export_results_to_pdf(
         except Exception as e:
             logger.error(f"GeoPDF export failed: {e}")
             raise RuntimeError(f"GeoPDF export failed: {e}") from e
-
 
     # Clean up temporary layouts
     clean_layouts(manager)

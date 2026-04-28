@@ -1,7 +1,7 @@
 import os
 import re
-
 from contextlib import contextmanager
+
 from qgis.core import (
     QgsCategorizedSymbolRenderer,
     QgsFillSymbol,
@@ -157,6 +157,7 @@ def temporary_visibility(root):
         # Intentionally do not restore original visibility to keep the
         # visibility state set within the context (result layers remain visible).
         pass
+
 
 def set_layer_and_parents_visible(root: QgsLayerTreeGroup, layer: QgsMapLayer) -> bool:
     """Make a layer and all its parent groups visible.
