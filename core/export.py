@@ -1,22 +1,18 @@
 import csv
 import os
-import re
 from datetime import datetime
 
 from qgis.core import (
-    QgsMapLayer,
-    QgsLayerTreeGroup,
     QgsLayoutExporter,
     QgsLayoutItemMap,
     QgsLayoutPoint,
     QgsLayoutSize,
+    QgsMapLayer,
     QgsProject,
     QgsRectangle,
     QgsUnitTypes,
-    QgsVectorLayer
+    QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QDate, QDateTime, QTime  # noqa: UP035
-from qgis.PyQt.QtGui import QFont  # noqa: UP035
 
 # Import helpers from geopdf_utils
 from .geopdf_utils import (
@@ -29,29 +25,21 @@ from .geopdf_utils import (
     ajouter_fleche_nord,
     ajouter_logo,
     ajouter_titre,
-    creer_layout,
-    nettoyer_layouts,
-    is_simple_fill,
-    set_layer_opacity
 )
 from .logger import logger
+from .utils import (
+    _format_value,
+    _safe_filename,
+    creer_layout,
+    is_simple_fill,
+    nettoyer_layouts,
+    set_layer_and_parents_visible,
+    set_layer_opacity,
+)
 
-
-def _format_value(val):
-    if val is None:
-        return ""
-    if isinstance(val, QDateTime):
-        return val.toString("yyyy-MM-dd HH:mm:ss") if val.isValid() else ""
-    if isinstance(val, QDate):
-        return val.toString("yyyy-MM-dd") if val.isValid() else ""
-    if isinstance(val, QTime):
-        return val.toString("HH:mm:ss") if val.isValid() else ""
-    return val
-
-
-def _safe_filename(name: str) -> str:
-    """Turn a layer name into a safe filename (no path separators, etc.)."""
-    return re.sub(r"[^\w\s\-()]", "_", name).strip()
+# ============================================================
+# EXPORT CSV
+# ============================================================
 
 
 def export_results_to_csv(
@@ -93,7 +81,7 @@ def export_results_to_csv(
 
 
 # ============================================================
-# EXPORT PRINCIPAL
+# EXPORT PDF
 # ============================================================
 
 
@@ -148,15 +136,7 @@ def export_results_to_pdf(
         try:
             if is_simple_fill(layer):
                 set_layer_opacity(layer, opacity=0.8)
-            tree_layer = root.findLayer(layer.id())
-            if tree_layer:
-                # Ensure parent groups are visible
-                parent = tree_layer.parent()
-                while parent and isinstance(parent, QgsLayerTreeGroup):
-                    parent.setItemVisibilityChecked(True)
-                    parent = parent.parent()
-                tree_layer.setItemVisibilityChecked(True)
-                visible_count += 1
+            visible_count += int(set_layer_and_parents_visible(root, layer))
         except Exception as exc:
             logger.exception("Could not set visibility for layer %s: %s", layer.name(), exc)
             # continue – a single failure should not abort the whole export
@@ -167,14 +147,7 @@ def export_results_to_pdf(
     # If a basemap layer is provided, make it visible as well
     if basemap_layer is not None:
         try:
-            tree_layer = root.findLayer(basemap_layer.id())
-            if tree_layer:
-                parent = tree_layer.parent()
-                while parent and isinstance(parent, QgsLayerTreeGroup):
-                    parent.setItemVisibilityChecked(True)
-                    parent = parent.parent()
-                tree_layer.setItemVisibilityChecked(True)
-                visible_count += 1
+            visible_count += int(set_layer_and_parents_visible(root, basemap_layer))
         except Exception as exc:
             logger.exception("Could not set visibility for basemap layer %s: %s", basemap_layer.name(), exc)
 

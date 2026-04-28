@@ -15,8 +15,6 @@ from datetime import datetime
 from PyQt5.QtCore import QPointF
 from PyQt5.QtGui import QFont, QPolygonF
 from qgis.core import (
-    QgsFillSymbol,
-    QgsTextFormat,
     QgsLayoutExporter,
     QgsLayoutItemLabel,
     QgsLayoutItemLegend,
@@ -30,61 +28,12 @@ from qgis.core import (
     QgsLayoutSize,
     QgsLegendStyle,
     QgsLineSymbol,
-    QgsPrintLayout,
     QgsProject,
+    QgsTextFormat,
     QgsUnitTypes,
-    QgsSingleSymbolRenderer,
-    QgsCategorizedSymbolRenderer,
-    QgsRenderContext
 )
-from qgis.PyQt.QtCore import QFile
 
-# ──────────────────────────────────────────────
-#  Gestion de la transparence
-# ──────────────────────────────────────────────
-
-def is_simple_fill(layer):
-    renderer = layer.renderer()
-    if renderer is None:
-        return False
-    if isinstance(renderer, QgsSingleSymbolRenderer):
-        return isinstance(renderer.symbol(), QgsFillSymbol)
-    if isinstance(renderer, QgsCategorizedSymbolRenderer):
-        context = QgsRenderContext()
-        return all(isinstance(s, QgsFillSymbol) for s in renderer.symbols(context))
-    return False
-
-def set_layer_opacity(layer, opacity):
-    renderer = layer.renderer()
-    if renderer is None:
-        return
-    context = QgsRenderContext()
-    # Pour SingleSymbolRenderer
-    if isinstance(renderer, QgsSingleSymbolRenderer):
-        symbol = renderer.symbol()
-        symbol.setOpacity(opacity)
-    # Pour CategorizedSymbolRenderer
-    elif isinstance(renderer, QgsCategorizedSymbolRenderer):
-        for symbol in renderer.symbols(context):
-            symbol.setOpacity(opacity)
-
-# ──────────────────────────────────────────────
-#  Petit utilitaire de chemin vers les icônes
-# ──────────────────────────────────────────────
-
-
-def _icons_dir():
-    """Renvoie le chemin absolu du dossier resources du plugin, situé à la racine du projet."""
-    # Le fichier géopdf_utils.py se trouve dans le sous‑dossier ``core`` ; le dossier ``resources`` est à la racine du dépôt
-    basepath = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
-    return os.path.join(basepath, "resources").replace("\\", "/")
-
-
-def get_icon_path(icon_name):
-    """Renvoie le chemin complet d'une icône si elle existe, sinon ''."""
-    path = os.path.join(_icons_dir(), icon_name)
-    return path if QFile.exists(path) else ""
-
+from .utils import creer_layout, get_icon_path
 
 # ──────────────────────────────────────────────
 #  Fonction interne : rectangle QPolygonF
@@ -244,61 +193,6 @@ def ajouter_credits_fdp(layout, x=250.0, y=150.0):
     label.attemptResize(QgsLayoutSize(40, 20, QgsUnitTypes.LayoutMillimeters))
     label.attemptMove(QgsLayoutPoint(x, y, QgsUnitTypes.LayoutMillimeters))
     return label
-
-
-# ──────────────────────────────────────────────
-#  Gestion des layouts
-# ──────────────────────────────────────────────
-
-
-def nettoyer_layouts(manager):
-    """Supprime tous les layouts existants pour éviter les erreurs C++."""
-    for layout in manager.printLayouts():
-        manager.removeLayout(layout)
-
-
-def creer_layout(project, manager, nom):
-    """Crée un nouveau QgsPrintLayout nommé, en supprimant tout doublon existant."""
-    for layout in manager.printLayouts():
-        if layout.name() == nom:
-            manager.removeLayout(layout)
-            break
-
-    layout = QgsPrintLayout(project)
-    layout.initializeDefaults()
-    layout.setName(nom)
-    manager.addLayout(layout)
-    return layout
-
-
-# ──────────────────────────────────────────────
-#  Gestion de la visibilité des couches
-# ──────────────────────────────────────────────
-
-
-def _set_layer_visibility(nom_couche, nom_groupe, visible):
-    """Allume ou éteint une couche dans un groupe donné.
-
-    Le groupe n'est allumé que si visible=True.
-    Si visible=False, seule la couche est éteinte (le groupe
-    peut contenir d'autres couches encore visibles).
-    """
-    root = QgsProject.instance().layerTreeRoot()
-    groupe = root.findGroup(nom_groupe)
-    couche = None
-    if groupe is not None:
-        if visible:
-            groupe.setItemVisibilityChecked(True)
-        for child in groupe.children():
-            if child.name() == nom_couche:
-                layers = QgsProject.instance().mapLayersByName(nom_couche)
-                if layers:
-                    couche = layers[0]
-                    tree_layer = root.findLayer(couche.id())
-                    if tree_layer:
-                        tree_layer.setItemVisibilityChecked(visible)
-                break
-    return groupe, couche
 
 
 # ──────────────────────────────────────────────

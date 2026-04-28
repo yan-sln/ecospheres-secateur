@@ -1,6 +1,5 @@
+from qgis.core import QgsFeature, QgsMapLayerProxyModel, QgsProject, QgsVectorLayer, QgsWkbTypes
 from qgis.gui import QgsMapLayerComboBox
-from qgis.core import QgsProject, QgsVectorLayer, QgsMapLayer, QgsMapLayerProxyModel, QgsWkbTypes, QgsFeature
-from qgis.PyQt.QtCore import QStringListModel, Qt, QTimer
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
     QFileDialog,
@@ -13,7 +12,8 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core.export import export_results_to_csv, export_results_to_pdf
-from ..core.intersector import add_results_to_project, find_layers, intersect_layer, _get_group_by_path
+from ..core.intersector import _get_group_by_path, add_results_to_project, intersect_layer
+from ..core.utils import find_layers
 
 
 class SecateurPanel(QDockWidget):
@@ -41,7 +41,7 @@ class SecateurPanel(QDockWidget):
 
         #
         layout.addWidget(QLabel("Sélectionner l'objet à intersecter :"))
-        
+
         # Row with button only
         btn_row = QHBoxLayout()
         self.run_button = QPushButton("Utiliser la géométrie active")
@@ -170,13 +170,11 @@ class SecateurPanel(QDockWidget):
                 )
             self.run_button.setEnabled(True)
 
-
-
         elif num_selected > 1:
             # Multiple features selected
             self._selected_layer = layer
             self._selected_feature = None
-            self.status_label.setText(f"Plusieurs objets sélectionnés !")
+            self.status_label.setText("Plusieurs objets sélectionnés !")
             self.run_button.setEnabled(False)
         else:
             # No feature selected
@@ -206,7 +204,7 @@ class SecateurPanel(QDockWidget):
 
         project = QgsProject.instance()
         root = project.layerTreeRoot()
-        group = root.findGroup('Résultats secateur')
+        group = root.findGroup("Résultats secateur")
         if group:
             group.removeAllChildren()
             root.removeChildNode(group)
@@ -241,7 +239,7 @@ class SecateurPanel(QDockWidget):
                 objs_group.removeAllChildren()
                 QgsProject.instance().layerTreeRoot().removeChildNode(objs_group)
 
-            layer_count = max(len(results) - 1, 0)   # on enlève la couche source
+            layer_count = max(len(results) - 1, 0)  # on enlève la couche source
             self._finish_progress(f"{layer_count} couches trouvées.")
         else:
             self._result_layers = []
@@ -279,8 +277,8 @@ class SecateurPanel(QDockWidget):
         Returns True when the group is present, False otherwise.
         """
         root = QgsProject.instance().layerTreeRoot()
-        if not root.findGroup('Résultats secateur'):
-            self.status_label.setText('Aucun résultat Sécateur à exporter.')
+        if not root.findGroup("Résultats secateur"):
+            self.status_label.setText("Aucun résultat Sécateur à exporter.")
             self.export_csv_button.setEnabled(False)
             self.export_pdf_button.setEnabled(False)
             return False

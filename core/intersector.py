@@ -1,66 +1,9 @@
 import processing  # type: ignore
-from qgis.core import (
-    QgsLayerTreeGroup,
-    QgsLayerTreeLayer,
-    QgsProject,
-    QgsVectorLayer,
-    QgsRasterLayer,
-    QgsProcessingFeedback,
-    QgsProcessingContext
-)
+from qgis.core import QgsProcessingContext, QgsProcessingFeedback, QgsProject, QgsRasterLayer, QgsVectorLayer
+
+from .utils import _get_group_by_path
 
 # ---------------- LAYERS ---------------- #
-
-
-def _get_group_by_path(path):
-    """Return the QgsLayerTreeGroup matching the hierarchical *path*.
-    *path* is a list of group names, e.g. ["Paris", "Sections"].
-    Returns ``None`` if any component is missing.
-    """
-    project = QgsProject.instance()
-    if not project:
-        return None
-
-    node = project.layerTreeRoot()
-    for name in path:
-        if not node:
-            return None
-        node = next(
-            (child for child in node.children()
-             if isinstance(child, QgsLayerTreeGroup) and child.name() == name),
-            None,
-        )
-    return node
-
-
-def find_layers(exclude: QgsVectorLayer | None = None) -> list[QgsVectorLayer]:
-    project = QgsProject.instance()
-    if project is None:
-        return []
-
-    root = project.layerTreeRoot()
-    if root is None:
-        return []
-
-    results = []
-    _collect_layers(root, results, exclude)
-    return results
-
-
-def _collect_layers(group, out, exclude):
-    for child in group.children():
-        if isinstance(child, QgsLayerTreeGroup):
-            if child.isVisible():
-                _collect_layers(child, out, exclude)
-
-        elif isinstance(child, QgsLayerTreeLayer):
-            if not child.isVisible():
-                continue
-
-            layer = child.layer()
-
-            if isinstance(layer, QgsVectorLayer) and layer != exclude:
-                out.append(layer)
 
 
 def _reproject_layer(layer, target_crs, feedback=None, context=None):
@@ -76,13 +19,9 @@ def _reproject_layer(layer, target_crs, feedback=None, context=None):
 
     # --- VECTEUR ---
     if isinstance(layer, QgsVectorLayer):
-        params = {
-            'INPUT': layer,
-            'TARGET_CRS': target_crs.toWkt(),
-            'OUTPUT': 'memory:'
-        }
+        params = {"INPUT": layer, "TARGET_CRS": target_crs.toWkt(), "OUTPUT": "memory:"}
         result = processing.run("native:reprojectlayer", params, context=context, feedback=feedback)
-        reprojected_layer = result['OUTPUT']
+        reprojected_layer = result["OUTPUT"]
         if isinstance(reprojected_layer, QgsVectorLayer):
             reprojected_layer.setName(layer.name() + "_reproj")
         if isinstance(reprojected_layer, str):
@@ -92,24 +31,25 @@ def _reproject_layer(layer, target_crs, feedback=None, context=None):
     # --- RASTER ---
     if isinstance(layer, QgsRasterLayer):
         params = {
-            'INPUT': layer.source(),
-            'TARGET_CRS': target_crs.toWkt(),
-            'RESAMPLING': 0,  # nearest neighbor
-            'NODATA': None,
-            'TARGET_RESOLUTION': None,
-            'OPTIONS': '',
-            'DATA_TYPE': 0,
-            'TARGET_EXTENT': None,
-            'TARGET_EXTENT_CRS': None,
-            'MULTITHREADING': True,
-            'EXTRA': '',
-            'OUTPUT': 'TEMPORARY_OUTPUT'
+            "INPUT": layer.source(),
+            "TARGET_CRS": target_crs.toWkt(),
+            "RESAMPLING": 0,  # nearest neighbor
+            "NODATA": None,
+            "TARGET_RESOLUTION": None,
+            "OPTIONS": "",
+            "DATA_TYPE": 0,
+            "TARGET_EXTENT": None,
+            "TARGET_EXTENT_CRS": None,
+            "MULTITHREADING": True,
+            "EXTRA": "",
+            "OUTPUT": "TEMPORARY_OUTPUT",
         }
         result = processing.run("gdal:warpreproject", params, context=context, feedback=feedback)
-        reprojected_layer = QgsRasterLayer(result['OUTPUT'], layer.name() + "_reproj")
+        reprojected_layer = QgsRasterLayer(result["OUTPUT"], layer.name() + "_reproj")
         return reprojected_layer
 
     raise ValueError(f"Unsupported layer type: {type(layer)}")
+
 
 # ---------------- INTERSECTION ---------------- #
 
