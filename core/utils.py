@@ -305,11 +305,14 @@ def clean_layouts(manager):
 
 
 def create_layout(project, manager, nom):
-    """Create a new named ``QgsPrintLayout`` after removing any existing layout with the same name."""
-    for layout in manager.printLayouts():
-        if layout.name() == nom:
-            manager.removeLayout(layout)
-            break
+    """Create a new named ``QgsPrintLayout`` after removing any existing layout with the same name.
+
+    Uses ``manager.layoutByName`` for direct lookup instead of iterating over all layouts.
+    """
+    # Directly obtain an existing layout with the given name, if any
+    existing = manager.layoutByName(nom)
+    if existing:
+        manager.removeLayout(existing)
 
     layout = QgsPrintLayout(project)
     layout.initializeDefaults()
