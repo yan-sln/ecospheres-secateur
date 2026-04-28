@@ -28,6 +28,7 @@ from .geopdf_utils import (
 )
 from .logger import logger
 from .utils import (
+    Progress,
     _format_value,
     _safe_filename,
     clean_layouts,
@@ -46,12 +47,12 @@ from .utils import (
 def export_results_to_csv(
     result_layers: list[QgsVectorLayer],
     output_dir: str,
-    progress_callback=None,
+    progress: Progress | None = None,
 ) -> list[str]:
     """Export each result layer as a separate CSV file inside output_dir.
 
     Creates output_dir if it doesn't exist. Returns the list of written file paths.
-    progress_callback(current, total, name) is called before each layer.
+    progress.update(current, total, name) is called before each layer if a progress object is provided.
     """
     os.makedirs(output_dir, exist_ok=True)
     total = len(result_layers)
@@ -61,8 +62,8 @@ def export_results_to_csv(
         if not isinstance(layer, QgsVectorLayer):
             continue  # Skip non‑vector layers such as basemap
         layer_name = layer.name().removesuffix(" - intersect")
-        if progress_callback:
-            progress_callback(i, total, layer_name)
+        if progress:
+            progress.update(i, total, layer_name)
 
         filename = _safe_filename(layer_name) + ".csv"
         filepath = os.path.join(output_dir, filename)
@@ -89,7 +90,7 @@ def export_results_to_csv(
 def export_results_to_pdf(
     result_layers: list[QgsVectorLayer],
     output_path: str,
-    progress_callback=None,
+    progress: Progress | None = None,
     basemap_layer: QgsMapLayer | None = None,
 ):
     """Export a PDF (GeoPDF) report for the given result layers.
@@ -150,8 +151,8 @@ def export_results_to_pdf(
         layer_names = [lyr.name() for lyr in result_layers]
 
         # Progress callback – signal start of heavy layout work
-        if progress_callback:
-            progress_callback(0, 1, "Export GeoPDF")
+        if progress:
+            progress.update(0, 1, "Export GeoPDF")
 
         # ---------------------------------------------------------------------
         # Build layout using geopdf_utils helpers

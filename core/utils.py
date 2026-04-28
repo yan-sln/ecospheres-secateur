@@ -204,6 +204,39 @@ def _set_layer_visibility(nom_couche, nom_groupe, visible):
 
 
 # ──────────────────────────────────────────────
+#  Progress utilities
+# ──────────────────────────────────────────────
+
+
+class Progress:
+    """Lightweight wrapper for a progress callback.
+
+    The stored ``callback`` must accept three positional arguments:
+    ``current`` (int), ``total`` (int) and ``label`` (str).  If ``callback``
+    is ``None`` the :meth:`update` method becomes a no‑op, mirroring the
+    previous ``if progress_callback:`` guards throughout the codebase.
+    """
+
+    def __init__(self, callback=None):
+        self.callback = callback
+
+    def update(self, current, total, label=""):
+        """Invoke the wrapped callback if present.
+
+        Parameters
+        ----------
+        current: int
+            Current step index.
+        total: int
+            Total number of steps.
+        label: str, optional
+            Human‑readable description of the step.
+        """
+        if self.callback:
+            self.callback(current, total, label)
+
+
+# ──────────────────────────────────────────────
 #  Icon utilities
 # ──────────────────────────────────────────────
 

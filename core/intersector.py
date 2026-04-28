@@ -3,7 +3,7 @@ from contextlib import suppress
 import processing  # type: ignore
 from qgis.core import QgsProcessingContext, QgsProcessingFeedback, QgsProject, QgsRasterLayer, QgsVectorLayer
 
-from .utils import get_or_create_group
+from .utils import Progress, get_or_create_group
 
 # ──────────────────────────────────────────────
 #  LAYERS
@@ -60,7 +60,7 @@ def _reproject_layer(layer, target_crs, feedback=None, context=None):
 # ──────────────────────────────────────────────
 
 
-def intersect_layer(source_layer, layers, progress_callback=None):
+def intersect_layer(source_layer, layers, progress: Progress | None = None):
     results = []
     project = QgsProject.instance()
     if project is None:
@@ -74,8 +74,8 @@ def intersect_layer(source_layer, layers, progress_callback=None):
     results.append(source_layer_proj)
 
     for i, layer in enumerate(layers):
-        if progress_callback:
-            progress_callback(i, len(layers), layer.name())
+        if progress:
+            progress.update(i, len(layers), layer.name())
 
         if layer is None or layer == source_layer:
             continue
@@ -108,8 +108,8 @@ def intersect_layer(source_layer, layers, progress_callback=None):
         if mem_layer.featureCount() > 0:
             results.append(mem_layer)
 
-    if progress_callback:
-        progress_callback(len(layers), len(layers), "")
+    if progress:
+        progress.update(len(layers), len(layers), "")
 
     return results
 

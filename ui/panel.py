@@ -14,7 +14,7 @@ from qgis.PyQt.QtWidgets import (
 from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.intersector import add_results_to_project, intersect_layer
 from ..core.logger import logger
-from ..core.utils import find_layers, get_or_create_group
+from ..core.utils import Progress, find_layers, get_or_create_group
 
 
 class SecateurPanel(QDockWidget):
@@ -221,13 +221,12 @@ class SecateurPanel(QDockWidget):
 
         self._start_progress(len(layers))
 
-        def progress(current, total, name):
-            self._update_progress(current, total, f"{current}/{total} : {name}")
+        progress = Progress(self._update_progress)
 
         results = intersect_layer(
             self._selected_layer,
             layers,
-            progress_callback=progress,
+            progress=progress,
         )
 
         if results:
@@ -267,7 +266,7 @@ class SecateurPanel(QDockWidget):
             export_results_to_pdf(
                 self._result_layers,
                 folder,
-                progress_callback=self._update_progress,
+                progress=Progress(self._update_progress),
                 basemap_layer=self._selected_basemap,
             )
 
