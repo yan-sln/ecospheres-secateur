@@ -141,43 +141,45 @@ class SecateurPanel(QDockWidget):
             # Crée ou réutilise une couche mémoire pour l'objet sélectionné
             layer_name = f"{layer.name()}_feature_{feature.id()}"
             project = QgsProject.instance()
-            # Vérifier si une couche mémoire portant ce nom existe déjà
+            # Supprimer toute couche mémoire existante portant le même nom afin d'éviter les résidus
             existing_layers = project.mapLayersByName(layer_name)
             if existing_layers:
-                # Réutiliser la couche existante
-                mem_layer = existing_layers[0]
-            else:
-                # Crée une nouvelle couche mémoire avec le bon type géométrique et CRS
-                geom_type = QgsWkbTypes.displayString(layer.wkbType())
-                mem_layer = QgsVectorLayer(
-                    f"{geom_type}?crs={layer.crs().authid()}",
-                    layer_name,
-                    "memory",
-                )
+                # La couche existe : on la retire du projet avant d'en créer une nouvelle
+                for lyr in existing_layers:
+                    project.removeMapLayer(lyr)
+                # Aucun objet mémoire n’est conservé ; on continue avec la création ci‑dessous
 
-                # Ajouter les champs de la couche source
-                mem_layer.dataProvider().addAttributes(layer.fields())
-                mem_layer.updateFields()
+            # Crée une nouvelle couche mémoire avec le bon type géométrique et CRS
+            geom_type = QgsWkbTypes.displayString(layer.wkbType())
+            mem_layer = QgsVectorLayer(
+                f"{geom_type}?crs={layer.crs().authid()}",
+                layer_name,
+                "memory",
+            )
 
-                # Cloner la feature pour éviter tout problème de référence
-                new_feat = QgsFeature()
-                new_feat.setGeometry(feature.geometry())
-                new_feat.setAttributes(feature.attributes())
+            # Ajouter les champs de la couche source
+            mem_layer.dataProvider().addAttributes(layer.fields())
+            mem_layer.updateFields()
 
-                # Ajouter la feature à la couche mémoire
-                mem_layer.dataProvider().addFeature(new_feat)
-                mem_layer.updateExtents()
+            # Cloner la feature pour éviter tout problème de référence
+            new_feat = QgsFeature()
+            new_feat.setGeometry(feature.geometry())
+            new_feat.setAttributes(feature.attributes())
 
-                # Ajouter la couche au projet sans la placer à la racine
-                project.addMapLayer(mem_layer, False)
+            # Ajouter la feature à la couche mémoire
+            mem_layer.dataProvider().addFeature(new_feat)
+            mem_layer.updateExtents()
 
-                # S’assurer que le groupe "Objets créés" existe et y ajouter la couche
-                group = get_created_objects_group()
-                # Insérer la couche dans le groupe (si déjà dans le groupe, l’insérer de nouveau n’a aucun effet)
-                group.insertLayer(-1, mem_layer)
+            # Ajouter la couche au projet sans la placer à la racine
+            project.addMapLayer(mem_layer, False)
 
-                self._selected_layer = mem_layer
-                self._selected_feature = feature
+            # S’assurer que le groupe "Objets créés" existe et y ajouter la couche
+            group = get_created_objects_group()
+            # Insérer la couche dans le groupe (si déjà dans le groupe, l’insérer de nouveau n’a aucun effet)
+            group.insertLayer(-1, mem_layer)
+
+            self._selected_layer = mem_layer
+            self._selected_feature = feature
 
         elif num_selected > 1:
             # Multiple features selected
