@@ -83,6 +83,19 @@ class SecateurPanel(QDockWidget):
         self.setWidget(container)
 
     # ──────────────────────────────────────────────
+    #  Button utilities
+    # ──────────────────────────────────────────────
+
+    def _set_export_enabled(self, csv: bool | None = None, pdf: bool | None = None) -> None:
+        """Enable/disable export buttons.
+        Pass None to leave a button unchanged.
+        """
+        if csv is not None:
+            self.export_csv_button.setEnabled(csv)
+        if pdf is not None:
+            self.export_pdf_button.setEnabled(pdf)
+
+    # ──────────────────────────────────────────────
     #  Layer utilities
     # ──────────────────────────────────────────────
 
@@ -96,12 +109,12 @@ class SecateurPanel(QDockWidget):
         if layer is None:
             self._selected_basemap = None
             self.status_label.setText("Fond de carte non sélectionné.")
-            self.export_pdf_button.setEnabled(False)
+            self._set_export_enabled(csv=None, pdf=False)
             return
 
         self._selected_basemap = layer
         self.status_label.setText(f"Fond de carte sélectionné : {layer.name()}")
-        self.export_pdf_button.setEnabled(True)
+        self._set_export_enabled(csv=None, pdf=True)
 
     def _use_active_layer_or_feature(self):
         """Retrieve the active vector layer or a single selected feature if exactly one is selected."""
@@ -227,10 +240,8 @@ class SecateurPanel(QDockWidget):
         if results:
             add_results_to_project(results)
             self._result_layers = results
-
-            self.export_csv_button.setEnabled(True)
             # PDF export requires basemap selection; keep disabled until basemap chosen
-            self.export_pdf_button.setEnabled(False)
+            self._set_export_enabled(csv=True, pdf=False)
             # Clean up the temporary "Objets créés" group if it exists
             objs_group = get_or_create_group(["Objets créés"], clear=True)
             if objs_group:
@@ -239,8 +250,7 @@ class SecateurPanel(QDockWidget):
             self._finish_progress(f"{layer_count} couches trouvées.")
         else:
             self._result_layers = []
-            self.export_csv_button.setEnabled(False)
-            self.export_pdf_button.setEnabled(False)
+            self._set_export_enabled(csv=False, pdf=False)
             self._finish_progress("Aucun résultat.")
 
     # ──────────────────────────────────────────────
@@ -277,8 +287,7 @@ class SecateurPanel(QDockWidget):
         root = QgsProject.instance().layerTreeRoot()
         if not root.findGroup("Résultats secateur"):
             self.status_label.setText("Aucun résultat Sécateur à exporter.")
-            self.export_csv_button.setEnabled(False)
-            self.export_pdf_button.setEnabled(False)
+            self._set_export_enabled(csv=False, pdf=False)
             return False
         return True
 
