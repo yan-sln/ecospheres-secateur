@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 
 from qgis.core import (
+    QgsProcessingFeedback,
     QgsLayoutExporter,
     QgsLayoutItemMap,
     QgsLayoutPoint,
@@ -28,7 +29,6 @@ from .geopdf_utils import (
 )
 from .logger import logger
 from .utils import (
-    Progress,
     _format_value,
     _safe_filename,
     clean_layouts,
@@ -48,7 +48,7 @@ from .utils import (
 def export_results_to_csv(
     result_layers: list[QgsVectorLayer],
     output_dir: str,
-    progress: Progress | None = None,
+    feedback: QgsProcessingFeedback | None = None,
 ) -> list[str]:
     """Export each result layer as a separate CSV file inside output_dir.
 
@@ -80,7 +80,7 @@ def export_results_to_csv(
 
         written.append(filepath)
 
-    iterate_layers(result_layers, _write_csv, progress)
+    iterate_layers(result_layers, _write_csv, feedback)
 
     return written
 
@@ -93,7 +93,7 @@ def export_results_to_csv(
 def export_results_to_pdf(
     result_layers: list[QgsVectorLayer],
     output_path: str,
-    progress: Progress | None = None,
+    feedback: QgsProcessingFeedback | None = None,
     basemap_layer: QgsMapLayer | None = None,
 ):
     """Export a PDF (GeoPDF) report for the given result layers.
@@ -146,7 +146,7 @@ def export_results_to_pdf(
                 logger.exception("Could not set visibility for layer %s: %s", layer.name(), exc)
                 # continue – a single failure should not abort the whole export
 
-        iterate_layers(result_layers, _make_visible, progress)
+        iterate_layers(result_layers, _make_visible, feedback)
 
         if visible_count == 0:
             logger.warning("export_results_to_pdf called with result_layers but none could be made visible")
@@ -161,9 +161,9 @@ def export_results_to_pdf(
         # Layer names for the legend
         layer_names = [lyr.name() for lyr in result_layers]
 
-        # Progress callback – signal start of heavy layout work
-        if progress:
-            progress.update(0, 1, "Export GeoPDF")
+        # Feedback callback – signal start of heavy layout work
+        if feedback:
+            feedback.setProgress(0)
 
         # ---------------------------------------------------------------------
         # Build layout using geopdf_utils helpers

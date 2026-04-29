@@ -1,4 +1,4 @@
-from qgis.core import QgsFeature, QgsMapLayerProxyModel, QgsProject, QgsVectorLayer, QgsWkbTypes
+from qgis.core import QgsFeature, QgsMapLayerProxyModel, QgsProject, QgsVectorLayer, QgsWkbTypes, QgsProcessingFeedback
 from qgis.gui import QgsMapLayerComboBox
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
@@ -14,7 +14,7 @@ from qgis.PyQt.QtWidgets import (
 from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.intersector import add_results_to_project, intersect_layer
 from ..core.logger import logger
-from ..core.utils import Progress, find_layers, get_created_objects_group, get_results_group
+from ..core.utils import find_layers, get_created_objects_group, get_results_group
 
 
 class SecateurPanel(QDockWidget):
@@ -51,6 +51,11 @@ class SecateurPanel(QDockWidget):
         self.run_button.setEnabled(True)
         self.run_button.clicked.connect(self._execute)
         btn_row.addWidget(self.run_button)
+        # Cancel button placeholder – future hook for processing feedback cancellation
+        # self.cancel_button = QPushButton("Annuler")
+        # self.cancel_button.setEnabled(False)
+        # self.cancel_button.clicked.connect(self._cancel_feedback)
+        # btn_row.addWidget(self.cancel_button)
         layout.addLayout(btn_row)
 
         # Basemap selector
@@ -73,6 +78,11 @@ class SecateurPanel(QDockWidget):
         layout.addLayout(export_row)
 
         self.progress_bar = QProgressBar()
+        # Cancel button placeholder – future hook for processing cancellation
+        # self.cancel_button = QPushButton("Annuler")
+        # self.cancel_button.setEnabled(False)
+        # self.cancel_button.clicked.connect(self._cancel_feedback)
+        self._feedback = None
         self.progress_bar.setVisible(False)
         layout.addWidget(self.progress_bar)
 
@@ -197,22 +207,27 @@ class SecateurPanel(QDockWidget):
 
     def _execute(self):
         """Orchestrate active geometry selection then run the intersection with error handling."""
-        # Attempt to select the active layer or feature; UI messages are set inside the method.
         self._use_active_layer_or_feature()
-        # If selection failed, the button remains disabled and we stop.
         if self._selected_layer is None:
             return
         try:
             self._on_run()
         except Exception as e:
-            # Show a user‑friendly error and disable the run button to avoid repeated failures.
             self._set_status(f"Erreur d'exécution : {e}", level="error")
+        finally:
+            # Re‑enable run button, disable cancel, clear feedback
+            self.run_button.setEnabled(True)
+            # self.cancel_button.setEnabled(False)
+            self._feedback = None
 
     # ──────────────────────────────────────────────
     #  Process execution
     # ──────────────────────────────────────────────
 
     def _on_run(self):
+        # Disable run, enable cancel
+        self.run_button.setEnabled(False)
+        # self.cancel_button.setEnabled(True)
         if self._selected_layer is None:
             return
 
@@ -224,14 +239,13 @@ class SecateurPanel(QDockWidget):
             self._set_status("Aucune couche à comparer.", level="error")
             return
 
-        self._start_progress(len(layers))
-
-        progress = Progress(self._update_progress)
+        feedback = QgsProcessingFeedback()
+        feedback.progressChanged.connect(lambda v: self.progress_bar.setValue(int(v)))  # type: ignore
 
         results = intersect_layer(
             self._selected_layer,
             layers,
-            progress=progress,
+            feedback=feedback,
         )
 
         if results:
@@ -268,12 +282,24 @@ class SecateurPanel(QDockWidget):
             return
         folder = QFileDialog.getExistingDirectory(self, "Dossier PDF")
         if folder:
-            export_results_to_pdf(
-                self._result_layers,
-                folder,
-                progress=Progress(self._update_progress),
-                basemap_layer=self._selected_basemap,
-            )
+            feedback = QgsProcessingFeedback()
+            feedback.progressChanged.connect(lambda v: self.progress_bar.setValue(int(v)))  # type: ignore
+            self._feedback = feedback
+            # Disable run, enable cancel during export
+            self.run_button.setEnabled(False)
+            # self.cancel_button.setEnabled(True)
+            try:
+                export_results_to_pdf(
+                    self._result_layers,
+                    folder,
+                    feedback=feedback,
+                    basemap_layer=self._selected_basemap,
+                )
+            finally:
+                # Restore UI state after export (whether success or error)
+                self.run_button.setEnabled(True)
+                # self.cancel_button.setEnabled(False)
+                self._feedback = None
 
     def _verify_results_group(self):
         """Check if the 'Résultats secateur' group exists.
@@ -293,8 +319,8 @@ class SecateurPanel(QDockWidget):
     #  Progress
     # ──────────────────────────────────────────────
 
-    def _start_progress(self, total):
-        self.progress_bar.setMaximum(total)
+    def _start_progress(self):
+        self.progress_bar.setMaximum(100)
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(True)
 
@@ -302,6 +328,14 @@ class SecateurPanel(QDockWidget):
         self.progress_bar.setValue(current)
         self._set_status(text, level="info")
         self._force_repaint()
+
+    def _cancel_feedback(self):
+        """Cancel the current processing feedback, if any."""
+        if getattr(self, "_feedback", None):
+            try:
+                self._feedback.cancel()  # type: ignore
+            except Exception:
+                pass
 
     def _set_status(self, message: str, level: str = "info") -> None:
         """Update the status label and log the message.

@@ -3,7 +3,7 @@ from contextlib import suppress
 import processing  # type: ignore
 from qgis.core import QgsProcessingContext, QgsProcessingFeedback, QgsProject, QgsRasterLayer, QgsVectorLayer
 
-from .utils import Progress, get_results_group
+from .utils import get_results_group
 
 # ──────────────────────────────────────────────
 #  LAYERS
@@ -60,8 +60,9 @@ def _reproject_layer(layer, target_crs, feedback=None, context=None):
 # ──────────────────────────────────────────────
 
 
-def intersect_layer(source_layer, layers, progress: Progress | None = None):
+def intersect_layer(source_layer, layers, feedback: QgsProcessingFeedback | None = None):
     results = []
+    total = len(layers)
     project = QgsProject.instance()
     if project is None:
         return results
@@ -74,11 +75,15 @@ def intersect_layer(source_layer, layers, progress: Progress | None = None):
     results.append(source_layer_proj)
 
     for i, layer in enumerate(layers):
-        if progress:
-            progress.update(i, len(layers), layer.name())
+        # if feedback and feedback.isCanceled():
+        #     break
 
         if layer is None or layer == source_layer:
             continue
+
+        if feedback:
+            feedback.setProgress(int(i / total * 100))
+            feedback.pushInfo(f"Intersection avec {layer.name()}")
 
         # Reproject overlay to project CRS
         overlay_for_query = _reproject_layer(layer, project_crs)
@@ -107,9 +112,6 @@ def intersect_layer(source_layer, layers, progress: Progress | None = None):
 
         if mem_layer.featureCount() > 0:
             results.append(mem_layer)
-
-    if progress:
-        progress.update(len(layers), len(layers), "")
 
     return results
 
