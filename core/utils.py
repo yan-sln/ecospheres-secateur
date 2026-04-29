@@ -1,11 +1,13 @@
 import os
 from datetime import datetime
 
+
 def timestamp_str() -> str:
     """Return current datetime formatted as "YYYY_MM_DD_HHh_MMin".
     Centralises the timestamp format used for exported files.
     """
     return datetime.now().strftime("%Y_%m_%d_%Hh_%Mmin")
+
 
 import re
 from contextlib import contextmanager
@@ -27,7 +29,6 @@ from qgis.PyQt.QtCore import QDate, QDateTime, QFile, QTime  # noqa: UP035
 # ──────────────────────────────────────────────
 #  Layer utilities
 # ──────────────────────────────────────────────
-
 
 
 def get_or_create_group(path: list[str], clear: bool = False):
@@ -74,7 +75,6 @@ def get_or_create_group(path: list[str], clear: bool = False):
 # Group helpers (DRY wrappers)
 # ---------------------------------------------------------------------------
 from .constants import CREATED_OBJECTS_GROUP_NAME, RESULT_GROUP_NAME
-
 
 
 def get_results_group(clear: bool = False):
@@ -203,12 +203,9 @@ def set_layer_and_parents_visible(root: QgsLayerTreeGroup, layer: QgsMapLayer) -
     return True
 
 
-
-
 # ──────────────────────────────────────────────
 #  Progress utilities
 # ──────────────────────────────────────────────
-
 
 
 # ──────────────────────────────────────────────

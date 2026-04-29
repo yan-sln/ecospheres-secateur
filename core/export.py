@@ -1,14 +1,13 @@
 import csv
 import os
 
-
 from qgis.core import (
-    QgsProcessingFeedback,
     QgsLayoutExporter,
     QgsLayoutItemMap,
     QgsLayoutPoint,
     QgsLayoutSize,
     QgsMapLayer,
+    QgsProcessingFeedback,
     QgsProject,
     QgsRectangle,
     QgsUnitTypes,

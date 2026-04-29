@@ -1,4 +1,4 @@
-from qgis.core import QgsFeature, QgsMapLayerProxyModel, QgsProject, QgsVectorLayer, QgsWkbTypes, QgsProcessingFeedback
+from qgis.core import QgsFeature, QgsMapLayerProxyModel, QgsProcessingFeedback, QgsProject, QgsVectorLayer, QgsWkbTypes
 from qgis.gui import QgsMapLayerComboBox
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
@@ -10,6 +10,7 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
 from ..core.constants import RESULT_GROUP_NAME
 from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.intersector import add_results_to_project, intersect_layer
