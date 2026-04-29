@@ -93,6 +93,15 @@ def get_created_objects_group(clear: bool = False):
     return get_or_create_group([CREATED_OBJECTS_GROUP_NAME], clear=clear)
 
 
+def filter_out_source(layers: list[QgsVectorLayer], source: QgsVectorLayer) -> list[QgsVectorLayer]:
+    """Return a new list of *layers* without the *source* layer.
+
+    This helper centralises the exclusion logic used by several parts of the
+    plugin, ensuring DRY code.
+    """
+    return [lyr for lyr in layers if lyr != source]
+
+
 def find_layers(exclude: QgsVectorLayer | None = None) -> list[QgsVectorLayer]:
     """Return a list of visible vector layers in the current QGIS project.
 

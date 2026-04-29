@@ -3,7 +3,7 @@ from contextlib import suppress
 import processing  # type: ignore
 from qgis.core import QgsProcessingContext, QgsProcessingFeedback, QgsProject, QgsRasterLayer, QgsVectorLayer
 
-from .utils import get_results_group
+from .utils import filter_out_source, get_results_group
 
 # ──────────────────────────────────────────────
 #  LAYERS
@@ -74,13 +74,9 @@ def intersect_layer(source_layer, layers, feedback: QgsProcessingFeedback | None
     source_layer_proj = _reproject_layer(source_layer, project_crs)
     results.append(source_layer_proj)
 
+    # Exclude the source layer from processing
+    layers = filter_out_source(layers, source_layer)
     for i, layer in enumerate(layers):
-        # if feedback and feedback.isCanceled():
-        #     break
-
-        if layer is None or layer == source_layer:
-            continue
-
         if feedback:
             feedback.setProgress(int(i / total * 100))
             feedback.pushInfo(f"Intersection avec {layer.name()}")
