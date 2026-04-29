@@ -1,26 +1,11 @@
-from contextlib import suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
-from qgis.core import QgsFeature, QgsMapLayerProxyModel, QgsProcessingFeedback, QgsProject, QgsVectorLayer, QgsWkbTypes
-from qgis.gui import QgsMapLayerComboBox
-from qgis.PyQt.QtWidgets import (
-    QDockWidget,
-    QFileDialog,
-    QHBoxLayout,
-    QLabel,
-    QProgressBar,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from qgis.core import QgsFeature, QgsProcessingFeedback, QgsProject, QgsVectorLayer, QgsWkbTypes
 
 from ..core.constants import CREATED_OBJECTS_GROUP_NAME, RESULT_GROUP_NAME
-from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.intersector import add_results_to_project, intersect_layer
-from ..core.logger import logger
 from ..core.utils import find_layers, get_created_objects_group, get_results_group
-
 
 # ──────────────────────────────────────────────
 #  Service result objects (explicit contracts)
@@ -149,11 +134,7 @@ class SecateurService:
     #  Memory layer
     # ──────────────────────────────────────────────
 
-    def _create_memory_layer_from_feature(
-    self,
-    source_layer: QgsVectorLayer,
-    feature: QgsFeature
-) -> QgsVectorLayer:
+    def _create_memory_layer_from_feature(self, source_layer: QgsVectorLayer, feature: QgsFeature) -> QgsVectorLayer:
         layer_name = f"{source_layer.name()}_feature_{feature.id()}"
         project = QgsProject.instance()
 
