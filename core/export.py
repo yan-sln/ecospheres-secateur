@@ -192,7 +192,6 @@ def export_results_to_pdf(
         add_copyright(layout)
         add_map_credits(layout)
 
-        # Legend handling – use iface when available, otherwise skip
         nb_items = 0
         try:
             legend, nb_items = _make_legend(layout, map_item, layer_names)
