@@ -66,7 +66,7 @@ class SecateurService:
 
         results_group = get_results_group()
         if results_group is None:
-            return SelectionResult(None, None, "Impossible d'accéder au groupe 'Résultats secateur'.", "error")
+            return SelectionResult(None, None, f"Impossible d'accéder au groupe {RESULT_GROUP_NAME}.", "error")
 
         if results_group.findLayer(layer.id()) is not None:
             return SelectionResult(None, None, f"La sélection appartient au groupe {RESULT_GROUP_NAME}.", "warning")
