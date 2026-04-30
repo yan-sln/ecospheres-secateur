@@ -246,24 +246,19 @@ def add_copyright(layout, x=250.0, y=200.0, organisme="DDT21", font_size=10):
     return label
 
 
-def add_map_credits(layout, x=250.0, y=150.0):
+def add_map_credits(layout, text:str, x=250.0, y=150.0):
     """Add the credits for IGN map sources.
 
     Parameters:
         layout (QgsLayout): The layout to modify.
+        text (str): The text to display
         x (float, optional): X position in millimeters. Defaults to 250.0.
         y (float, optional): Y position in millimeters. Defaults to 150.0.
 
     Returns:
         QgsLayoutItemLabel: The created label item containing the credits.
     """
-    texte = (
-        "Sources des fonds cartographiques:\n"
-        "©IGN - PCI_EXPRESS - 2022\n"
-        "©IGN - SCAN25® Version 1\n"
-        "©IGN - BDORTHO® - PVA 2018"
-    )
-    label = ajouter_label(layout, texte, x, y, font_name="Arial", font_size=7)
+    label = ajouter_label(layout, text, x, y, font_name="Arial", font_size=7)
     label.attemptResize(QgsLayoutSize(40, 20, QgsUnitTypes.LayoutMillimeters))
     return label
 

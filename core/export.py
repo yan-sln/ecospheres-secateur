@@ -190,7 +190,8 @@ def export_results_to_pdf(
         add_north_arrow(layout)
         add_logo(layout)
         add_copyright(layout)
-        add_map_credits(layout)
+        if basemap_layer is not None:
+            add_map_credits(layout, f"©{basemap_layer.name()}")
 
         nb_items = 0
         try:
