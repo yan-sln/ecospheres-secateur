@@ -92,6 +92,7 @@ def export_results_to_csv(
 def export_results_to_pdf(
     result_layers: list[QgsVectorLayer],
     output_path: str,
+    logo_path: str,
     feedback: QgsProcessingFeedback | None = None,
     basemap_layer: QgsMapLayer | None = None,
     author: str | None = None,
@@ -190,7 +191,7 @@ def export_results_to_pdf(
         # Scale bar, north arrow, logo, copyright and credits
         add_scale(layout, map_item, extent_rect)
         add_north_arrow(layout)
-        add_logo(layout)
+        add_logo(layout, logo_path)
         if author:
             add_copyright(layout, author=author)
         else:
@@ -211,7 +212,9 @@ def export_results_to_pdf(
         if nb_items >= seuil_legende_interne and legend is not None:
             layout.removeLayoutItem(legend)
             try:
-                _export_separate_legend(os.path.dirname(full_path), layer_names, nb_items, date_hm, extent_rect)
+                _export_separate_legend(
+                    os.path.dirname(full_path), layer_names, nb_items, date_hm, extent_rect, logo_path
+                )
             except Exception as e:
                 logger.warning(f"External legend export failed: {e}")
 

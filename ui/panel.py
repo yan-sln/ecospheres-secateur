@@ -7,7 +7,6 @@ from qgis.PyQt.QtWidgets import (
     QDockWidget,
     QFileDialog,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QProgressBar,
@@ -17,10 +16,11 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core.export import export_results_to_csv, export_results_to_pdf
+from ..core.image_manager import ImageManager
 from ..core.logger import logger
 from ..core.utils import get_results_group
 from .service import SecateurService
-from .settings import SettingsManager
+from .settings import SettingsDialog, SettingsManager
 
 # ──────────────────────────────────────────────
 #  State object with explicit invariants
@@ -54,6 +54,7 @@ class SecateurPanel(QDockWidget):
         self.iface = iface
 
         self.settings = SettingsManager()
+        self.image_manager = ImageManager()
         self.state = _SecateurState()
         self.service = SecateurService()
 
@@ -106,9 +107,9 @@ class SecateurPanel(QDockWidget):
         self.export_pdf_button.clicked.connect(self._on_export_pdf)
         geopdf_row.addWidget(self.export_pdf_button)
 
-        self.edit_author_button = QPushButton("Modifier l’auteur…")
-        self.edit_author_button.clicked.connect(self._on_edit_author)
-        geopdf_row.addWidget(self.edit_author_button)
+        self.edit_settings_button = QPushButton("Paramètres…")
+        self.edit_settings_button.clicked.connect(self._open_settings_dialog)
+        geopdf_row.addWidget(self.edit_settings_button)
 
         layout.addLayout(geopdf_row)
 
@@ -151,22 +152,37 @@ class SecateurPanel(QDockWidget):
         self._selected_basemap = layer
         self._set_status(f"Fond de carte sélectionné : {layer.name()}", "info")
 
-    def _on_edit_author(self):
-        current = self.settings.author
-        text, ok = QInputDialog.getText(
-            self,
-            "Modifier l’auteur",
-            "Nom de l’auteur :",
-            text=current,
-        )
-        if not ok or not text.strip():
-            return
-        #!!! Ici ajouter tests sur chaîne (longueur, etc.)
+    def _open_settings_dialog(self):
+        dlg = SettingsDialog(self.settings, self.image_manager, self)
+
         try:
-            self.settings.author = text
-            self._set_status(f"Auteur mis à jour : {text}", "info")
+            if not dlg.exec_():
+                return
+
+            values = dlg.get_values()
+
+            author = values["author"]
+            if not author:
+                self._set_status("Auteur invalide.", "error")
+                return
+
+            logo_path = self.settings.logo_path  # fallback
+
+            if values["logo"]:
+                logo_path = self.image_manager.safe_import_logo(values["logo"])
+
+            self.settings.author = author
+            self.settings.logo_path = logo_path
+
+            self._set_status("Paramètres mis à jour.", "info")
+
         except ValueError as e:
+            # erreurs métier (validation image)
             self._set_status(str(e), "error")
+
+        except Exception as e:
+            # erreurs inattendues (IO, filesystem, etc.)
+            self._set_status(f"Erreur inattendue : {e}", "error")
 
     # ──────────────────────────────────────────────
     #  Execution (rewired)
@@ -245,6 +261,7 @@ class SecateurPanel(QDockWidget):
                 full_path = export_results_to_pdf(
                     self.state.result_layers,
                     folder,
+                    self.settings.logo_path,
                     feedback=feedback,
                     basemap_layer=self._selected_basemap,
                     author=self.settings.author,

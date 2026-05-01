@@ -203,11 +203,12 @@ def add_north_arrow(layout, x=275.0, y=4.0):
     return nord
 
 
-def add_logo(layout, x=255.0, y=165.0, taille=30.0, icon_name="PREF_Cote_d_Or_CMJN_295_432px_Marianne.jpg"):
+def add_logo(layout, path, x=255.0, y=165.0, taille=30.0):
     """Add the prefecture/DDT logo picture to the layout.
 
     Parameters:
         layout (QgsLayout): The layout to modify.
+        path
         x (float, optional): X position in millimeters. Defaults to 255.0.
         y (float, optional): Y position in millimeters. Defaults to 165.0.
         taille (float, optional): Size of the logo in millimeters (both width and height). Defaults to 30.0.
@@ -217,9 +218,7 @@ def add_logo(layout, x=255.0, y=165.0, taille=30.0, icon_name="PREF_Cote_d_Or_CM
         QgsLayoutItemPicture: The picture item representing the logo.
     """
     logo = QgsLayoutItemPicture(layout)
-    path = get_icon_path(icon_name)
-    if path:
-        logo.setPicturePath(path)
+    logo.setPicturePath(path)
     layout.addLayoutItem(logo)
     logo.attemptResize(QgsLayoutSize(taille, taille, QgsUnitTypes.LayoutMillimeters))
     logo.attemptMove(QgsLayoutPoint(x, y, QgsUnitTypes.LayoutMillimeters))
@@ -334,7 +333,7 @@ def _make_legend(layout, map_item, layer_names, x=220.0, y=25.0, filter_by_exten
     return legend, nb_items
 
 
-def _export_separate_legend(directory, layer_names, nb_items, date_hm, extent):
+def _export_separate_legend(directory, layer_names, nb_items, date_hm, extent, logo_path):
     """Export the legend to a separate PDF with page size adapting to the number of items (A4, A3, or A0).
 
     Parameters:
@@ -343,6 +342,7 @@ def _export_separate_legend(directory, layer_names, nb_items, date_hm, extent):
         nb_items (int): Number of legend items, used to choose page size.
         date_hm (str): Date and hour string for naming the file.
         extent (QgsRectangle): Extent for a temporary map item required for filtering.
+        logo_path
 
     Returns:
         str: Full path to the exported PDF file.
@@ -396,7 +396,7 @@ def _export_separate_legend(directory, layer_names, nb_items, date_hm, extent):
     legend.setColumnSpace(5)
 
     # Element
-    add_logo(layout, x=x_logo, y=y_logo)
+    add_logo(layout, logo_path, x=x_logo, y=y_logo)
     add_copyright(layout, x=x_date, y=y_date, font_size=8)
 
     # Export
