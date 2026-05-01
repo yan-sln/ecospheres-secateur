@@ -74,7 +74,13 @@ class SecateurPanel(QDockWidget):
         btn_row.addWidget(self.run_button)
         layout.addLayout(btn_row)
 
+        self.export_csv_button = QPushButton("Exporter CSV")
+        self.export_csv_button.setEnabled(False)
+        self.export_csv_button.clicked.connect(self._on_export_csv)
+        layout.addWidget(self.export_csv_button)
+
         layout.addWidget(QLabel("Fond de carte :"))
+
         self.basemap_combo = QgsMapLayerComboBox()
         self.basemap_combo.setFilters(QgsMapLayerProxyModel.RasterLayer)  # type: ignore
         self.basemap_combo.layerChanged.connect(self._on_basemap_selected)  # type: ignore
@@ -86,23 +92,18 @@ class SecateurPanel(QDockWidget):
             self.basemap_combo.setLayer(default_basemap)
             self._selected_basemap = default_basemap
 
-        export_row = QHBoxLayout()
-
-        self.export_csv_button = QPushButton("Exporter CSV")
-        self.export_csv_button.setEnabled(False)
-        self.export_csv_button.clicked.connect(self._on_export_csv)
-        export_row.addWidget(self.export_csv_button)
+        geopdf_row = QHBoxLayout()
 
         self.export_pdf_button = QPushButton("Exporter PDF")
         self.export_pdf_button.setEnabled(False)
         self.export_pdf_button.clicked.connect(self._on_export_pdf)
-        export_row.addWidget(self.export_pdf_button)
-
-        layout.addLayout(export_row)
+        geopdf_row.addWidget(self.export_pdf_button)
 
         self.edit_author_button = QPushButton("Modifier l’auteur…")
         self.edit_author_button.clicked.connect(self._on_edit_author)
-        layout.addWidget(self.edit_author_button)
+        geopdf_row.addWidget(self.edit_author_button)
+
+        layout.addLayout(geopdf_row)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -177,9 +178,9 @@ class SecateurPanel(QDockWidget):
         self.state.selected_feature = selection.feature
 
         try:
-            self._run_process()
+            result = self._run_process()
             self._set_export_enabled(pdf=True)
-            if self._selected_basemap is None:
+            if result.level != "error" and self._selected_basemap is None:
                 self._set_status("Fond de carte non sélectionné.", "warning")
         except Exception as e:
             self._set_status(f"Erreur d'exécution : {e}", "error")
@@ -206,6 +207,7 @@ class SecateurPanel(QDockWidget):
             self._set_export_enabled(csv=False, pdf=False)
 
         self._finish_progress(result.message)
+        return result
 
     # Export unchanged
     def _on_export_csv(self):
