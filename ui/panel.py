@@ -7,6 +7,7 @@ from qgis.PyQt.QtWidgets import (
     QDockWidget,
     QFileDialog,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QProgressBar,
     QPushButton,
@@ -99,6 +100,10 @@ class SecateurPanel(QDockWidget):
 
         layout.addLayout(export_row)
 
+        self.edit_author_button = QPushButton("Modifier l’auteur…")
+        self.edit_author_button.clicked.connect(self._on_edit_author)
+        layout.addWidget(self.edit_author_button)
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         layout.addWidget(self.progress_bar)
@@ -129,7 +134,6 @@ class SecateurPanel(QDockWidget):
         elif level == "warning":
             logger.warning(message)
 
-    # Basemap unchanged
     def _on_basemap_selected(self, layer):
         if layer is None:
             self._selected_basemap = None
@@ -138,6 +142,23 @@ class SecateurPanel(QDockWidget):
 
         self._selected_basemap = layer
         self._set_status(f"Fond de carte sélectionné : {layer.name()}", "info")
+
+    def _on_edit_author(self):
+        current = self.settings.author
+        text, ok = QInputDialog.getText(
+            self,
+            "Modifier l’auteur",
+            "Nom de l’auteur :",
+            text=current,
+        )
+        if not ok or not text.strip():
+            return
+        #!!! Ici ajouter tests sur chaîne (longueur, etc.)
+        try:
+            self.settings.author = text
+            self._set_status(f"Auteur mis à jour : {text}", "info")
+        except ValueError as e:
+            self._set_status(str(e), "error")
 
     # ──────────────────────────────────────────────
     #  Execution (rewired)
