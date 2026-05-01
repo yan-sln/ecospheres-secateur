@@ -113,7 +113,7 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(buttons)
 
-        self._selected_logo = self.settings.logo_path
+        self._selected_logo = None
 
     def _select_logo(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -129,10 +129,13 @@ class SettingsDialog(QDialog):
         try:
             self.image_manager.validate_image(file_path)
             self._selected_logo = file_path
+            self.logo_label.setStyleSheet("")
             self.logo_label.setText(self._display_logo_name(file_path))
 
         except Exception as err:
-            raise ValueError(str(err)) from err
+            self.logo_label.setStyleSheet("color: red;")
+            self.logo_label.setText(f"{str(err)}")
+            self._selected_logo = None
 
     def get_values(self):
         return {
