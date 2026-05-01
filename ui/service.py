@@ -1,7 +1,14 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from qgis.core import QgsFeature, QgsMapLayer, QgsProcessingFeedback, QgsProject, QgsRasterLayer, QgsVectorLayer, QgsWkbTypes
+from qgis.core import (
+    QgsFeature,
+    QgsProcessingFeedback,
+    QgsProject,
+    QgsRasterLayer,
+    QgsVectorLayer,
+    QgsWkbTypes,
+)
 
 from ..core.constants import CREATED_OBJECTS_GROUP_NAME, RESULT_GROUP_NAME
 from ..core.intersector import add_results_to_project, intersect_layer
@@ -53,10 +60,7 @@ class SecateurService:
 
     def get_available_raster_layers(self):
         """Get all raster layers available in the current project."""
-        return [
-            lyr for lyr in QgsProject.instance().mapLayers().values()
-            if isinstance(lyr, QgsRasterLayer)
-        ]
+        return [lyr for lyr in QgsProject.instance().mapLayers().values() if isinstance(lyr, QgsRasterLayer)]
 
     # ──────────────────────────────────────────────
     #  Selection

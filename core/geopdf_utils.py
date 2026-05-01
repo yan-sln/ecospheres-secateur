@@ -226,7 +226,7 @@ def add_logo(layout, x=255.0, y=165.0, taille=30.0, icon_name="PREF_Cote_d_Or_CM
     return logo
 
 
-def add_copyright(layout, x=250.0, y=200.0, organisme="DDT21", font_size=10):
+def add_copyright(layout, x=250.0, y=200.0, author="DDT21", font_size=10):
     """Add a copyright label with the current date.
 
     Parameters:
@@ -240,13 +240,13 @@ def add_copyright(layout, x=250.0, y=200.0, organisme="DDT21", font_size=10):
         QgsLayoutItemLabel: The created label item.
     """
     date_str = datetime.strftime(datetime.now(), "%d/%m/%Y")
-    texte = f"© {organisme} le {date_str}"
+    texte = f"© {author} le {date_str}"
     label = ajouter_label(layout, texte, x, y, font_name="Arial", font_size=font_size)
     label.attemptResize(QgsLayoutSize(40, 20, QgsUnitTypes.LayoutMillimeters))
     return label
 
 
-def add_map_credits(layout, text:str, x=250.0, y=150.0):
+def add_map_credits(layout, text: str, x=250.0, y=150.0):
     """Add the credits for IGN map sources.
 
     Parameters:

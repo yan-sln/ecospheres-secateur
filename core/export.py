@@ -94,6 +94,7 @@ def export_results_to_pdf(
     output_path: str,
     feedback: QgsProcessingFeedback | None = None,
     basemap_layer: QgsMapLayer | None = None,
+    author: str | None = None,
 ):
     """Export a PDF (GeoPDF) report for the given result layers.
 
@@ -189,7 +190,10 @@ def export_results_to_pdf(
         add_scale(layout, map_item, extent_rect)
         add_north_arrow(layout)
         add_logo(layout)
-        add_copyright(layout)
+        if author:
+            add_copyright(layout, author=author)
+        else:
+            add_copyright(layout)
         if basemap_layer is not None:
             add_map_credits(layout, f"© {basemap_layer.name()}")
 

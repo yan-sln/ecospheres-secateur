@@ -18,6 +18,7 @@ from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.logger import logger
 from ..core.utils import get_results_group
 from .service import SecateurService
+from .settings import SettingsManager
 
 # ──────────────────────────────────────────────
 #  State object with explicit invariants
@@ -50,6 +51,7 @@ class SecateurPanel(QDockWidget):
         super().__init__("Ecosphères Secateur", parent or iface.mainWindow())
         self.iface = iface
 
+        self.settings = SettingsManager()
         self.state = _SecateurState()
         self.service = SecateurService()
 
@@ -156,7 +158,7 @@ class SecateurPanel(QDockWidget):
         try:
             self._run_process()
             self._set_export_enabled(pdf=True)
-            if self._selected_basemap is None :
+            if self._selected_basemap is None:
                 self._set_status("Fond de carte non sélectionné.", "warning")
         except Exception as e:
             self._set_status(f"Erreur d'exécution : {e}", "error")
@@ -210,6 +212,7 @@ class SecateurPanel(QDockWidget):
                     folder,
                     feedback=feedback,
                     basemap_layer=self._selected_basemap,
+                    author=self.settings.author,
                 )
                 self._set_status(f"GeoPDF exporté : {full_path}", "info")
             finally:
