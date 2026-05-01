@@ -9,6 +9,7 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
@@ -91,6 +92,12 @@ class SecateurPanel(QDockWidget):
             default_basemap = raster_layers[0]
             self.basemap_combo.setLayer(default_basemap)
             self._selected_basemap = default_basemap
+
+        layout.addWidget(QLabel("Titre du GeoPDF :"))
+        self.title_input = QLineEdit()
+        self.title_input.setPlaceholderText("Titre du rapport")
+        self.title_input.setText(self.settings.pdf_title)
+        layout.addWidget(self.title_input)
 
         geopdf_row = QHBoxLayout()
 
@@ -229,6 +236,11 @@ class SecateurPanel(QDockWidget):
 
             self.run_button.setEnabled(False)
 
+            title = self.title_input.text().strip()
+            if not title:
+                self._set_status("Le titre ne peut pas être vide.", "error")
+                return
+
             try:
                 full_path = export_results_to_pdf(
                     self.state.result_layers,
@@ -236,7 +248,9 @@ class SecateurPanel(QDockWidget):
                     feedback=feedback,
                     basemap_layer=self._selected_basemap,
                     author=self.settings.author,
+                    title=title,
                 )
+                self.settings.pdf_title = title
                 self._set_status(f"GeoPDF exporté : {full_path}", "info")
             finally:
                 self.run_button.setEnabled(True)

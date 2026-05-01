@@ -95,6 +95,7 @@ def export_results_to_pdf(
     feedback: QgsProcessingFeedback | None = None,
     basemap_layer: QgsMapLayer | None = None,
     author: str | None = None,
+    title: str | None = None,
 ):
     """Export a PDF (GeoPDF) report for the given result layers.
 
@@ -183,7 +184,7 @@ def export_results_to_pdf(
         layout.addLayoutItem(map_item)
 
         # Title and surrounding frame
-        add_title(layout, "Rapport")
+        add_title(layout, title)
         _add_frame_title(layout, largeur_page=295.0)
 
         # Scale bar, north arrow, logo, copyright and credits
