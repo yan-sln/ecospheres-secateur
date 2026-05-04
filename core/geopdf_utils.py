@@ -163,11 +163,18 @@ def add_scale(layout, map_item, canvas_extent, x=5.0, y=195.0):
 
     # Table de seuils : (seuil_max, unité, label, taille_segment)
     _thresholds = [
-        (100, QgsUnitTypes.DistanceMeters, "m", 25),
+        (20, QgsUnitTypes.DistanceMeters, "m", 5),
+        (50, QgsUnitTypes.DistanceMeters, "m", 10),
+        (100, QgsUnitTypes.DistanceMeters, "m", 20),
+        (200, QgsUnitTypes.DistanceMeters, "m", 50),
+        (300, QgsUnitTypes.DistanceMeters, "m", 75),
         (500, QgsUnitTypes.DistanceMeters, "m", 100),
         (1000, QgsUnitTypes.DistanceMeters, "m", 250),
-        (10000, QgsUnitTypes.DistanceKilometers, "km", 0.5),
-        (50000, QgsUnitTypes.DistanceKilometers, "km", 2.5),
+        (2000, QgsUnitTypes.DistanceKilometers, "km", 0.2),
+        (5000, QgsUnitTypes.DistanceKilometers, "km", 0.5),
+        (10000, QgsUnitTypes.DistanceKilometers, "km", 1),
+        (20000, QgsUnitTypes.DistanceKilometers, "km", 2),
+        (50000, QgsUnitTypes.DistanceKilometers, "km", 5),
     ]
     for seuil, unite, label, segment in _thresholds:
         if bar_size <= seuil:

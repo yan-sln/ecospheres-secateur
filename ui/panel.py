@@ -232,14 +232,16 @@ class SecateurPanel(QDockWidget):
         self._finish_progress(result.message)
         return result
 
-    # Export unchanged
     def _on_export_csv(self):
         if not self._verify_results_group():
             return
 
         folder = QFileDialog.getExistingDirectory(self, "Dossier CSV")
-        if folder:
-            export_results_to_csv(self.state.result_layers, folder)
+        try:
+            written = export_results_to_csv(self.state.result_layers, folder)
+            self._set_status(f"{len(written)} CSV exporté(s).", "info")
+        except Exception as err:
+            self._set_status({err}, "error")  #!!! à compléter
 
     def _on_export_pdf(self):
         if not self._verify_results_group():

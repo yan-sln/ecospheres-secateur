@@ -66,8 +66,7 @@ def export_results_to_csv(
         """
         if not isinstance(layer, QgsVectorLayer):
             return
-        layer_name = layer.name().removesuffix(" - intersect")
-        filename = _safe_filename(layer_name) + ".csv"
+        filename = _safe_filename(layer.name()) + ".csv"
         filepath = os.path.join(output_dir, filename)
 
         field_names = [field.name() for field in layer.fields()]
@@ -78,6 +77,7 @@ def export_results_to_csv(
                 writer.writerow([_format_value(v) for v in feat.attributes()])
 
         written.append(filepath)
+        logger.info(f"CSV exported to: {filepath}")
 
     iterate_layers(result_layers, _write_csv, feedback)
 

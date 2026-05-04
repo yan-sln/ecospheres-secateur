@@ -102,7 +102,7 @@ def intersect_layer(source_layer, layers, feedback: QgsProcessingFeedback | None
             },
         )
         mem_layer = extract["OUTPUT"]
-        mem_layer.setName(f"{layer.name()} - intersect")
+        mem_layer.setName(layer.name())
         with suppress(Exception):
             mem_layer.setRenderer(layer.renderer().clone())
 
