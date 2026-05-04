@@ -361,21 +361,10 @@ def _export_separate_legend(directory, layer_names, nb_items, date_hm, extent, l
     layout = create_layout(project, manager, layout_name)
 
     # Choose page size from number of items
-    if nb_items < 30:
-        page_format = "A4"
-        orientation = QgsLayoutItemPage.Orientation.Landscape
-        x_logo, y_logo = 260, 160
-        x_date, y_date = 250, 20
-    elif nb_items < 60:
-        page_format = "A3"
-        orientation = QgsLayoutItemPage.Orientation.Landscape
-        x_logo, y_logo = 390, 260
-        x_date, y_date = 370, 20
-    else:
-        page_format = "A0"
-        orientation = QgsLayoutItemPage.Orientation.Landscape
-        x_logo, y_logo = 1159, 800
-        x_date, y_date = 1140, 20
+    page_format = "A4"
+    orientation = QgsLayoutItemPage.Orientation.Landscape
+    x_logo, y_logo = 260, 160
+    x_date, y_date = 250, 20
 
     pc = layout.pageCollection()
     page = QgsLayoutItemPage(layout)
