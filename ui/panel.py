@@ -10,7 +10,6 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -136,10 +135,6 @@ class SecateurPanel(QDockWidget):
 
         layout.addWidget(csv_frame)
         csv_frame.setEnabled(False)
-
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        layout.addWidget(self.progress_bar)
 
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
@@ -305,12 +300,9 @@ class SecateurPanel(QDockWidget):
 
     # Progress unchanged
     def _create_feedback(self):
-        feedback = QgsProcessingFeedback()
-        feedback.progressChanged.connect(lambda v: self.progress_bar.setValue(int(v)))  # type: ignore
-        return feedback
+        return QgsProcessingFeedback()
 
     def _finish_progress(self, text):
-        self.progress_bar.setVisible(False)
         self._set_status(text, "info")
 
     def _cancel_feedback(self):
