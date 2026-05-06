@@ -316,6 +316,8 @@ def _make_legend(layout, map_item, layer_names, x=220.0, y=25.0, filter_by_exten
     legend.setLinkedMap(map_item)
     if filter_by_extent:
         legend.setLegendFilterByMapEnabled(True)
+
+    # Refresh the legend to ensure it's properly initialized
     legend.refresh()
 
     # Compter les items de légende

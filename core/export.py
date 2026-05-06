@@ -77,7 +77,6 @@ def export_results_to_csv(
                 writer.writerow([_format_value(v) for v in feat.attributes()])
 
         written.append(filepath)
-        logger.info(f"CSV exported to: {filepath}")
 
     iterate_layers(result_layers, _write_csv, feedback)
 
@@ -101,8 +100,9 @@ def export_results_to_pdf(
     """Export a PDF (GeoPDF) report for the given result layers.
 
     Uses helper functions from ``core.geopdf_utils`` and logs actions via the
-    plugin‑wide QGIS logger.
+    plugin-wide QGIS logger.
     """
+
     # Resolve output path – create a dated filename if a directory is supplied
     try:
         if os.path.isdir(output_path):
@@ -184,6 +184,9 @@ def export_results_to_pdf(
         map_item.attemptResize(QgsLayoutSize(240, 180, QgsUnitTypes.LayoutMillimeters))
         layout.addLayoutItem(map_item)
 
+        # Force refresh of the map item to ensure it's properly initialized
+        map_item.refresh()
+
         # Title and surrounding frame
         add_title(layout, title)
         _add_frame_title(layout, largeur_page=295.0)
@@ -226,8 +229,18 @@ def export_results_to_pdf(
         settings.forceVectorOutput = True
         settings.exportLayersAsVectors = True
         settings.exportMetadata = True
+
         try:
+            # Try to process events to avoid deadlocks
+            from qgis.PyQt.QtWidgets import QApplication
+
+            QApplication.processEvents()
+
             exporter.exportToPdf(full_path, settings)
+
+            # Process events again after export
+            QApplication.processEvents()
+
         except Exception as e:
             logger.error(f"GeoPDF export failed: {e}")
             raise RuntimeError(f"GeoPDF export failed: {e}") from e
@@ -237,3 +250,41 @@ def export_results_to_pdf(
 
     logger.info(f"GeoPDF exported to: {full_path}")
     return full_path, nb_items
+
+
+# ---------------------------------------------------------------------------
+# Task wrappers – used by UI via QgsTask.fromFunction
+# ---------------------------------------------------------------------------
+
+
+def _export_csv_task(layers, folder, feedback: QgsProcessingFeedback | None = None):
+    """Wrapper called from a QgsTask.
+    Delegates to :func:`export_results_to_csv` and returns the list of written
+    CSV files.  The *feedback* object is the same instance passed to the underlying
+    function, enabling progress reporting and cancellation.
+    """
+    return export_results_to_csv(layers, folder, feedback)
+
+
+def _export_pdf_task(
+    layers,
+    folder,
+    logo_path,
+    feedback: QgsProcessingFeedback | None = None,
+    basemap_layer=None,
+    author=None,
+    title=None,
+):
+    """Wrapper called from a QgsTask.
+    Calls :func:`export_results_to_pdf` with the supplied arguments and returns the
+    ``(full_path, nb_items)`` tuple.
+    """
+    return export_results_to_pdf(
+        result_layers=layers,
+        output_path=folder,
+        logo_path=logo_path,
+        feedback=feedback,
+        basemap_layer=basemap_layer,
+        author=author,
+        title=title,
+    )

@@ -1,7 +1,7 @@
 from contextlib import suppress
 from dataclasses import dataclass, field
 
-from qgis.core import QgsFeature, QgsMapLayerProxyModel, QgsProcessingFeedback, QgsVectorLayer
+from qgis.core import QgsApplication, QgsFeature, QgsMapLayerProxyModel, QgsProcessingFeedback, QgsTask, QgsVectorLayer
 from qgis.gui import QgsMapLayerComboBox
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
@@ -15,7 +15,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from ..core.export import export_results_to_csv, export_results_to_pdf
+from ..core.export import _export_csv_task, _export_pdf_task
 from ..core.image_manager import ImageManager
 from ..core.logger import logger
 from ..core.utils import get_results_group
@@ -207,6 +207,83 @@ class SecateurPanel(QDockWidget):
             # erreurs inattendues (IO, filesystem, etc.)
             self._set_status(f"Erreur inattendue : {e}", "error")
 
+    # ---------------------------------------------------------------------
+    #  Task helpers – run export functions in a QgsTask
+    # ---------------------------------------------------------------------
+    def _run_task(self, name: str, fn, *args, **kwargs):
+        """Create and start a QgsTask that executes *fn* with a feedback object.
+        ``fn`` must accept a ``feedback`` keyword argument (the task will pass the
+        same QgsProcessingFeedback instance that is stored in ``self._feedback``).
+        The task reports progress via the QGIS task manager and invokes
+        ``self._task_finished`` when done or cancelled.
+        """
+
+        # Fresh feedback for each task
+        # Create a fresh feedback object via the task itself.
+        # The task will own the QgsProcessingFeedback instance; we keep a
+        # reference so the cancel button can call ``cancel()``.
+        def task_func(task: QgsTask, fb: QgsProcessingFeedback):
+            # Forward the feedback to the wrapped export function.
+            try:
+                result = fn(*args, feedback=fb, **kwargs)
+
+                return result
+            except Exception as e:
+                # Log the exception to help debugging
+                logger.exception(f"Task {name} failed with exception: {e}")
+                # Re-raise the exception so the QgsTask system knows about it
+                raise
+
+        try:
+            task = QgsTask.fromFunction(
+                name,
+                task_func,
+                on_finished=lambda task, exception, result=None: self._task_finished(exception is None, result),
+            )
+
+            # Register with QGIS UI
+            QgsApplication.taskManager().addTask(task)
+
+            # UI feedback while running
+            self.run_button.setEnabled(False)
+            self.export_pdf_button.setEnabled(False)
+            self.export_csv_button.setEnabled(False)
+            self._set_status(f"{name} en cours…", "info")
+        except Exception as e:
+            logger.exception(f"Failed to start task {name}: {e}")
+            self._set_status(f"Échec du démarrage de la tâche {name}: {e}", "error")
+            self.run_button.setEnabled(True)
+            self.export_pdf_button.setEnabled(bool(self.state.result_layers))
+            self.export_csv_button.setEnabled(bool(self.state.result_layers))
+
+    def _task_finished(self, success: bool, result):
+        """Handle completion of a background task.
+        *success* indicates the task finished without cancellation. *result* is
+        whatever the wrapped export function returned.
+        """
+        # Reset UI state
+        self.run_button.setEnabled(True)
+        self.export_pdf_button.setEnabled(bool(self.state.result_layers))
+        self.export_csv_button.setEnabled(bool(self.state.result_layers))
+        self._feedback = None
+
+        if not success:
+            self._set_status("Export annulé par l'utilisateur.", "warning")
+            return
+
+        # Differentiate CSV (list) vs PDF (tuple) results
+        if isinstance(result, list):
+            self._set_status(f"{len(result)} CSV exporté(s).", "info")
+        elif isinstance(result, tuple) and len(result) == 2:
+            full_path, _ = result
+            self.settings.pdf_title = self.title_input.text().strip()
+            self._set_status(f"GeoPDF exporté : {full_path}", "info")
+        elif result is None:
+            # Handle case where result is None (likely an error occurred)
+            self._set_status("Erreur lors de l'export du GeoPDF.", "error")
+        else:
+            self._set_status("Export terminé (résultat inconnu).", "info")
+
     # ──────────────────────────────────────────────
     #  Execution (rewired)
     # ──────────────────────────────────────────────
@@ -254,41 +331,51 @@ class SecateurPanel(QDockWidget):
             return
 
         folder = QFileDialog.getExistingDirectory(self, "Dossier CSV")
+        if not folder:
+            return
+
+        # Direct export (bypass background task)
+        self._set_status("Export CSV en cours...", "info")
         try:
-            written = export_results_to_csv(self.state.result_layers, folder)
-            self._set_status(f"{len(written)} CSV exporté(s).", "info")
-        except Exception as err:
-            self._set_status(str(err), "error")  #!!! à compléter
+            result = _export_csv_task(self.state.result_layers, folder, feedback=None)
+            self._set_status(f"{len(result)} CSV exporté(s).", "info")
+        except Exception as e:
+            logger.exception(f"CSV export failed: {e}")
+            self._set_status(f"Erreur lors de l'export CSV: {e}", "error")
 
     def _on_export_pdf(self):
         if not self._verify_results_group():
             return
 
         folder = QFileDialog.getExistingDirectory(self, "Dossier PDF")
-        if folder:
-            feedback = self._create_feedback()
-            self._feedback = feedback
+        if not folder:
+            return
 
-            title = self.title_input.text().strip()
-            if not title:
-                self._set_status("Le titre ne peut pas être vide.", "error")
-                return
+        title = self.title_input.text().strip()
+        if not title:
+            self._set_status("Le titre ne peut pas être vide.", "error")
+            return
 
-            try:
-                full_path = export_results_to_pdf(
-                    self.state.result_layers,
-                    folder,
-                    self.settings.logo_path,
-                    feedback=feedback,
-                    basemap_layer=self._selected_basemap,
-                    author=self.settings.author,
-                    title=title,
-                )
-                self.settings.pdf_title = title
-                self._set_status(f"GeoPDF exporté : {full_path}", "info")
-            finally:
-                self.run_button.setEnabled(True)
-                self._feedback = None
+        # Direct export (bypass background task)
+        self._set_status("Export GeoPDF en cours...", "info")
+
+        try:
+            result = _export_pdf_task(
+                self.state.result_layers,
+                folder,
+                self.settings.logo_path,
+                feedback=None,
+                basemap_layer=self._selected_basemap,
+                author=self.settings.author,
+                title=title,
+            )
+            # Process the result similarly to _task_finished
+            full_path, _ = result
+            self.settings.pdf_title = title
+            self._set_status(f"GeoPDF exporté : {full_path}", "info")
+        except Exception as e:
+            logger.exception(f"Direct PDF export failed: {e}")
+            self._set_status(f"Erreur lors de l'export du GeoPDF: {e}", "error")
 
     def _verify_results_group(self):
         group = get_results_group()

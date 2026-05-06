@@ -18,6 +18,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QDate, QDateTime, QFile, QTime  # noqa: UP035
 
 from .constants import CREATED_OBJECTS_GROUP_NAME, RESULT_GROUP_NAME
+from .logger import logger
 
 # ──────────────────────────────────────────────
 #  Layer utilities
@@ -214,12 +215,16 @@ def iterate_layers(layers, callback, feedback=None):
 
     ``feedback`` – optional :class:`QgsProcessingFeedback` instance.  If provided,
     its ``setProgress`` method is called with ``int(i / total * 100)`` before
-    invoking the callback.
+    invoking the callback.  If the user cancels the associated task, the loop
+    aborts early.
     """
     total = len(layers)
     for i, layer in enumerate(layers):
         if feedback:
             feedback.setProgress(int(i / total * 100))
+            if getattr(feedback, "isCanceled", lambda: False)():
+                logger.info("Export cancelled by user after %d/%d layers", i, total)
+                break
         callback(layer)
 
 
