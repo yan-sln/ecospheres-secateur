@@ -372,12 +372,10 @@ class SecateurPanel(QDockWidget):
                     title=title,
                 )
 
-                full_path, _ = result
-
                 self.settings.pdf_title = title
 
                 self._set_status(
-                    f"GeoPDF exporté : {full_path}",
+                    f"GeoPDF exporté : {result}",
                     "info",
                 )
 

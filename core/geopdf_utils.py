@@ -286,16 +286,12 @@ def _make_legend(layout, map_item, layer_names, x=220.0, y=25.0, filter_by_exten
         filter_by_extent (bool, optional): Whether to filter by map extent. Defaults to True.
 
     Returns:
-        tuple: (legend, nb_items) where legend is the QgsLayoutItemLegend and nb_items is the count of legend items.
+        legend is the QgsLayoutItemLegend.
     """
     legend = QgsLayoutItemLegend(layout)
     legend.setTitle("Legende")
     legend.setFrameEnabled(True)
     legend.setFrameStrokeWidth(QgsLayoutMeasurement(0.4))
-
-    # Filtrer les couches du projet
-    all_layers = QgsProject.instance().mapLayers().values()
-    layers_to_add = [L for L in all_layers if L.name() in layer_names]
 
     # Styles de police
     group_style = QgsLegendStyle()
@@ -320,35 +316,19 @@ def _make_legend(layout, map_item, layer_names, x=220.0, y=25.0, filter_by_exten
     # Refresh the legend to ensure it's properly initialized
     legend.refresh()
 
-    # Compter les items de légende
-    nb_items = 0
-    for layer in layers_to_add:
-        renderer = layer.renderer()
-        if renderer is None:
-            nb_items += 1
-        elif hasattr(renderer, "categories"):  # categorized
-            nb_items += len(renderer.categories())
-        elif hasattr(renderer, "ranges"):  # graduated
-            nb_items += len(renderer.ranges())
-        elif hasattr(renderer, "rules"):  # rule-based
-            nb_items += len(renderer.rootRule().children())
-        else:
-            nb_items += 1
-
     layout.addLayoutItem(legend)
     legend.setColumnSpace(35)
     legend.attemptMove(QgsLayoutPoint(x, y, QgsUnitTypes.LayoutMillimeters))
 
-    return legend, nb_items
+    return legend
 
 
-def _export_separate_legend(directory, layer_names, nb_items, date_hm, extent, logo_path):
+def _export_separate_legend(directory, layer_names, date_hm, extent, logo_path):
     """Export the legend to a separate PDF with page size adapting to the number of items (A4, A3, or A0).
 
     Parameters:
         directory (str): Output directory path.
         layer_names (list of str): Layer names to include in the legend.
-        nb_items (int): Number of legend items, used to choose page size.
         date_hm (str): Date and hour string for naming the file.
         extent (QgsRectangle): Extent for a temporary map item required for filtering.
         logo_path

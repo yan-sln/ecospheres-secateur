@@ -229,13 +229,11 @@ def export_results_to_pdf(
         if basemap_layer is not None:
             add_map_credits(layout, f"© {basemap_layer.name()}")
 
-        nb_items = 0
         try:
-            legend, nb_items = _make_legend(layout, map_item, layer_names)
+            legend = _make_legend(layout, map_item, layer_names)
         except Exception as e:
             logger.error(f"Failed to build legend: {e}")
             legend = None
-            nb_items = 0
 
         if feedback:
             feedback.setProgress(70)
@@ -245,9 +243,7 @@ def export_results_to_pdf(
         if legend is not None:
             layout.removeLayoutItem(legend)
             try:
-                _export_separate_legend(
-                    os.path.dirname(full_path), layer_names, nb_items, date_hm, extent_rect, logo_path
-                )
+                _export_separate_legend(os.path.dirname(full_path), layer_names, date_hm, extent_rect, logo_path)
             except Exception as e:
                 logger.warning(f"External legend export failed: {e}")
 
@@ -288,4 +284,4 @@ def export_results_to_pdf(
     clean_layouts(manager)
 
     logger.info(f"GeoPDF exported to: {full_path}")
-    return full_path, nb_items
+    return full_path
