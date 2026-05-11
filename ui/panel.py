@@ -1,7 +1,7 @@
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 
-from qgis.core import QgsFeature, QgsMapLayerProxyModel, QgsProcessingFeedback, QgsVectorLayer
+from qgis.core import QgsMapLayerProxyModel, QgsProcessingFeedback, QgsVectorLayer
 from qgis.gui import QgsMapLayerComboBox
 from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtWidgets import (
@@ -19,9 +19,9 @@ from qgis.PyQt.QtWidgets import (
 
 from ..core.export import export_results_to_csv, export_results_to_pdf
 from ..core.image_manager import ImageManager
+from ..core.layer_resolver import LayerResolver
 from ..core.logger import logger
-from ..core.utils import get_results_group
-from .service import SecateurService
+from .service import ProcessResult, SecateurService
 from .settings import SettingsDialog, SettingsManager
 
 
@@ -48,21 +48,16 @@ def wait_cursor():
 class _SecateurState:
     # Invariant:
     # - None before valid selection
-    # - QgsVectorLayer after _handle_selection if success
-    selected_layer: QgsVectorLayer | None = None
-
-    # None means:
-    # - no feature selected
-    # - OR multiple features selected
-    selected_feature: QgsFeature | None = None
+    # - layer ID after _handle_selection if success
+    selected_layer_id: str | None = None
 
     # Invariant:
     # - always a list (never None)
-    # - contains only QgsVectorLayer
-    result_layers: list[QgsVectorLayer] = field(default_factory=list)
+    # - contains only layer IDs
+    result_layer_ids: list[str] = field(default_factory=list)
 
     def __post_init__(self):
-        assert isinstance(self.result_layers, list)
+        assert isinstance(self.result_layer_ids, list)
 
 
 class SecateurPanel(QDockWidget):
@@ -75,7 +70,7 @@ class SecateurPanel(QDockWidget):
         self.state = _SecateurState()
         self.service = SecateurService()
 
-        self._selected_basemap = None
+        self._selected_basemap_id: str | None = None
         self._feedback: QgsProcessingFeedback | None = None
 
         self._build_ui()
@@ -112,7 +107,7 @@ class SecateurPanel(QDockWidget):
         if raster_layers:
             default_basemap = raster_layers[0]
             self.basemap_combo.setLayer(default_basemap)
-            self._selected_basemap = default_basemap
+            self._selected_basemap_id = default_basemap.id()
 
         geopdf_layout.addWidget(QLabel("Modifier le titre :"))
         self.title_input = QLineEdit()
@@ -166,7 +161,7 @@ class SecateurPanel(QDockWidget):
         self._update_ui_state()
 
     def _update_ui_state(self):
-        has_results = bool(self.state.result_layers)
+        has_results = bool(self._resolve_result_layers())
 
         self.csv_frame.setEnabled(has_results)
         self.geopdf_frame.setEnabled(has_results)
@@ -183,14 +178,20 @@ class SecateurPanel(QDockWidget):
         elif level == "warning":
             logger.warning(message)
 
-    def _on_basemap_selected(self, layer):
-        if layer is None:
-            self._selected_basemap = None
-            self._set_status("Fond de carte non sélectionné.", "warning")
-            return
+    def _resolve_selected_layer(self) -> QgsVectorLayer | None:
+        if not self.state.selected_layer_id:
+            return None
 
-        self._selected_basemap = layer
-        self._set_status(f"Fond de carte sélectionné : {layer.name()}", "info")
+        return LayerResolver.get_vector(self.state.selected_layer_id)
+
+    def _resolve_result_layers(self):
+        return LayerResolver.get_many(self.state.result_layer_ids)
+
+    def _resolve_basemap(self):
+        if not self._selected_basemap_id:
+            return None
+
+        return LayerResolver.get(self._selected_basemap_id)
 
     def _open_settings_dialog(self):
         dlg = SettingsDialog(self.settings, self.image_manager, self)
@@ -224,6 +225,15 @@ class SecateurPanel(QDockWidget):
             # erreurs inattendues (IO, filesystem, etc.)
             self._set_status(f"Erreur inattendue : {e}", "error")
 
+    def _on_basemap_selected(self, layer):
+        if layer is None:
+            self._selected_basemap_id = None
+            self._set_status("Fond de carte non sélectionné.", "warning")
+            return
+
+        self._selected_basemap_id = layer.id()
+        self._set_status(f"Fond de carte sélectionné : {layer.name()}", "info")
+
     # ──────────────────────────────────────────────
     #  Execution
     # ──────────────────────────────────────────────
@@ -240,13 +250,12 @@ class SecateurPanel(QDockWidget):
         if selection.layer is None:
             return
 
-        self.state.selected_layer = selection.layer
-        self.state.selected_feature = selection.feature
+        self.state.selected_layer_id = selection.layer.id() if selection.layer else None
 
         try:
             with wait_cursor():
                 result = self._run_process()
-                if result.level != "error" and self._selected_basemap is None:
+                if result.level != "error" and self._selected_basemap_id is None:
                     self._set_status("Fond de carte non sélectionné.", "warning")
         except Exception as e:
             self._set_status(f"Erreur d'exécution : {e}", "error")
@@ -255,13 +264,28 @@ class SecateurPanel(QDockWidget):
             self._feedback = None
 
     def _run_process(self):
-        assert self.state.selected_layer is not None
+        selected_layer = self._resolve_selected_layer()
+
+        if selected_layer is None:
+            self._set_status(
+                "La couche sélectionnée n'existe plus.",
+                "error",
+            )
+
+            return ProcessResult(
+                [],
+                "La couche sélectionnée n'existe plus.",
+                "error",
+            )
 
         feedback = self._create_feedback()
 
-        result = self.service.run(self.state.selected_layer, feedback)
+        result = self.service.run(
+            selected_layer.id(),
+            feedback,
+        )
 
-        self.state.result_layers = result.result_layers
+        self.state.result_layer_ids = result.result_layer_ids
 
         self._set_status(result.message, result.level)
 
@@ -271,7 +295,7 @@ class SecateurPanel(QDockWidget):
         return result
 
     def _on_export_csv(self):
-        if not self._verify_results_group():
+        if not self._verify_results_exist():
             return
 
         folder = QFileDialog.getExistingDirectory(self, "Dossier CSV")
@@ -291,7 +315,7 @@ class SecateurPanel(QDockWidget):
         try:
             with wait_cursor():
                 result = export_results_to_csv(
-                    self.state.result_layers,
+                    self._resolve_result_layers(),
                     folder,
                     feedback=feedback,
                 )
@@ -313,7 +337,7 @@ class SecateurPanel(QDockWidget):
             self._end_busy_ui()
 
     def _on_export_pdf(self):
-        if not self._verify_results_group():
+        if not self._verify_results_exist():
             return
 
         folder = QFileDialog.getExistingDirectory(self, "Dossier PDF")
@@ -339,11 +363,11 @@ class SecateurPanel(QDockWidget):
         try:
             with wait_cursor():
                 result = export_results_to_pdf(
-                    self.state.result_layers,
+                    self._resolve_result_layers(),
                     folder,
                     self.settings.logo_path,
                     feedback=feedback,
-                    basemap_layer=self._selected_basemap,
+                    basemap_layer=self._resolve_basemap(),
                     author=self.settings.author,
                     title=title,
                 )
@@ -368,12 +392,23 @@ class SecateurPanel(QDockWidget):
         finally:
             self._end_busy_ui()
 
-    def _verify_results_group(self):
-        group = get_results_group()
-        if not group:
-            self._set_status("Aucun résultat à exporter.", "error")
-            self._update_ui_state()
+    def _invalidate_results(self):
+        self.state.result_layer_ids = []
+
+        self._update_ui_state()
+
+        self._set_status(
+            ("Les couches de résultat ont été supprimées du projet. Relancez le traitement."),
+            "warning",
+        )
+
+    def _verify_results_exist(self):
+        layers = self._resolve_result_layers()
+
+        if not layers:
+            self._invalidate_results()
             return False
+
         return True
 
     # Progress unchanged
@@ -397,7 +432,7 @@ class SecateurPanel(QDockWidget):
 
     def _end_busy_ui(self):
         self.run_button.setEnabled(True)
-        self.export_pdf_button.setEnabled(bool(self.state.result_layers))
-        self.export_csv_button.setEnabled(bool(self.state.result_layers))
+        self.export_pdf_button.setEnabled(bool(self._resolve_result_layers()))
+        self.export_csv_button.setEnabled(bool(self._resolve_result_layers()))
 
         self._feedback = None

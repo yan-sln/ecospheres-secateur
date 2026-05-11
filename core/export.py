@@ -46,7 +46,7 @@ from .utils import (
 
 
 def export_results_to_csv(
-    result_layers: list[QgsVectorLayer],
+    result_layers: list[QgsMapLayer],
     output_dir: str,
     feedback: QgsProcessingFeedback | None = None,
 ) -> list[str]:
@@ -62,7 +62,7 @@ def export_results_to_csv(
     def _write_csv(layer: QgsVectorLayer):
         """Callback used by :func:`iterate_layers` to write one CSV file.
 
-        Skips non‑vector layers to preserve existing behaviour.
+        Non-vector layers are ignored.
         """
         if not isinstance(layer, QgsVectorLayer):
             return
@@ -93,13 +93,13 @@ def export_results_to_csv(
 
 
 def export_results_to_pdf(
-    result_layers: list[QgsVectorLayer],
+    result_layers: list[QgsMapLayer],
     output_path: str,
     logo_path: str,
     feedback: QgsProcessingFeedback | None = None,
     basemap_layer: QgsMapLayer | None = None,
-    author: str | None = None,
-    title: str | None = None,
+    author: str = "",
+    title: str = "Résultats Secateur",
 ):
     """Export a PDF (GeoPDF) report for the given result layers.
 
@@ -125,7 +125,11 @@ def export_results_to_pdf(
 
     # Compute map extent from the first layer (add 5 % buffer)
     src_layer = result_layers[0]
-    bbox = src_layer.extent() if isinstance(src_layer, QgsVectorLayer) else src_layer.boundingBox()
+
+    if not isinstance(src_layer, QgsVectorLayer):
+        raise TypeError("First result layer must be a vector layer")
+
+    bbox = src_layer.extent()
     bbox.grow(bbox.width() * 0.05 + bbox.height() * 0.05)
     rec_emprise = [bbox.xMinimum(), bbox.yMinimum(), bbox.xMaximum(), bbox.yMaximum()]
     extent_rect = QgsRectangle(*rec_emprise)

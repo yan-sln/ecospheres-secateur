@@ -12,6 +12,7 @@ from qgis.core import (
 
 from ..core.constants import CREATED_OBJECTS_GROUP_NAME, RESULT_GROUP_NAME
 from ..core.intersector import add_results_to_project, intersect_layer
+from ..core.layer_resolver import LayerResolver
 from ..core.utils import find_layers, get_created_objects_group, get_results_group
 
 # ──────────────────────────────────────────────
@@ -37,13 +38,13 @@ class SelectionResult:
 
 @dataclass
 class ProcessResult:
-    result_layers: list[QgsVectorLayer]
+    result_layer_ids: list[str]
     message: str
     level: Level
 
     def __post_init__(self):
-        assert isinstance(self.result_layers, list)
-        assert all(isinstance(L, QgsVectorLayer) for L in self.result_layers)
+        assert isinstance(self.result_layer_ids, list)
+        assert all(isinstance(x, str) for x in self.result_layer_ids)
 
 
 # ──────────────────────────────────────────────
@@ -111,7 +112,16 @@ class SecateurService:
     #  Process
     # ──────────────────────────────────────────────
 
-    def run(self, selected_layer: QgsVectorLayer, feedback: QgsProcessingFeedback) -> ProcessResult:
+    def run(self, selected_layer_id: str, feedback: QgsProcessingFeedback) -> ProcessResult:
+        selected_layer = LayerResolver.get_vector(selected_layer_id)
+
+        if selected_layer is None:
+            return ProcessResult(
+                [],
+                "La couche sélectionnée est introuvable.",
+                "error",
+            )
+
         group = get_results_group(clear=True)
         if group is None:
             return ProcessResult([], "Impossible d'accéder au groupe 'Résultats secateur'.", "error")
@@ -131,8 +141,9 @@ class SecateurService:
 
             self._cleanup_created_objects_group()
 
+            result_ids = [layer.id() for layer in results]
             layer_count = max(len(results) - 1, 0)
-            return ProcessResult(results, f"{layer_count} couches trouvées.", "info")
+            return ProcessResult(result_ids, f"{layer_count} couches trouvées.", "info")
 
         return ProcessResult([], "Aucun résultat.", "info")
 
