@@ -18,6 +18,7 @@ from qgis.core import (
     QgsLegendStyle,
     QgsLineSymbol,
     QgsProject,
+    QgsRectangle,
     QgsTextFormat,
     QgsUnitTypes,
 )
@@ -274,10 +275,186 @@ def add_map_credits(layout, text: str, x=250.0, y=150.0):
 # ──────────────────────────────────────────────
 
 
+def generate_legend_pdf_from_template(
+    template_path: str,
+    output_path: str,
+    layer_names: list[str],
+    logo_path: str | None = None,
+    per_page: int = 25,
+) -> str:
+    """Generate a multi‑page legend PDF from a .qpt template.
+
+    The function loads the given QPT layout, then creates a legend for the
+    supplied *layer_names* on each page. Items such as the title, author and
+    date are cloned from the template to preserve styling while ensuring each
+    page has unique IDs. Long layer names are wrapped to avoid overflow.
+    """
+    # Load template layout
+    project = QgsProject.instance()
+    manager = project.layoutManager()
+    layout_name = f"LegendFromTemplate_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    layout = create_layout(project, manager, layout_name)
+    from qgis.core import QgsReadWriteContext
+    from qgis.PyQt.QtXml import QDomDocument
+
+    doc = QDomDocument()
+
+    with open(template_path, encoding="utf-8") as f:
+        doc.setContent(f.read())
+
+    context = QgsReadWriteContext()
+
+    layout.loadFromTemplate(
+        doc,
+        context,
+        clearExisting=True,
+    )
+
+    # Retrieve template items (may be None if not present)
+    legend_placeholder = layout.itemById("legend")
+    title_template = layout.itemById("title")
+    author_template = layout.itemById("author")
+    date_template = layout.itemById("date")
+    logo_template = layout.itemById("logo") if logo_path else None
+
+    # Store placeholder position before removal
+    if legend_placeholder:
+        legend_x = legend_placeholder.pos().x()
+        legend_y = legend_placeholder.pos().y()
+        layout.removeLayoutItem(legend_placeholder)
+        legend_placeholder = None
+    else:
+        legend_x = 30.0
+        legend_y = 30.0
+
+    # Determine page height for vertical offsets (A4 landscape)
+    first_page = layout.pageCollection().page(0)
+    page_height = first_page.pageSize().height() if first_page else 210.0
+
+    # Chunk original layer names per page (no temporary renaming)
+    chunks = list(_chunk_layers(layer_names, per_page))
+    total_pages = len(chunks)
+
+    for page_index, chunk in enumerate(chunks):
+        # Add a new page for all but the first (template already provides one)
+        if page_index > 0:
+            new_page = QgsLayoutItemPage(layout)
+            new_page.setPageSize(
+                "A4",
+                QgsLayoutItemPage.Orientation.Landscape,
+            )
+            layout.pageCollection().addPage(new_page)
+
+        offset = page_index * page_height
+
+        # Dummy map (invisible) required for legend linking
+        dummy_map = _create_dummy_map(layout, QgsRectangle())
+
+        # Build legend for this chunk
+        legend = _make_legend(
+            layout,
+            dummy_map,
+            x=legend_x,
+            y=legend_y + offset,
+            filter_by_extent=False,
+        )
+        # Set layer IDs explicitly using original layers
+        layer_ids = []
+        for name in chunk:
+            layers = project.mapLayersByName(name)
+            if layers:
+                layer_ids.append(layers[0].id())
+        if layer_ids:
+            from qgis.core import QgsLayerTree
+
+            root = QgsLayerTree()
+            project = QgsProject.instance()
+            for lid in layer_ids:
+                layer = project.mapLayer(lid)
+                if layer:
+                    root.addLayer(layer)
+            legend.model().setRootGroup(root)
+            legend.setId(f"legend_{page_index}")
+        # Title
+        if title_template:
+            title = QgsLayoutItemLabel(layout)
+            title.setText(f"Légende ({page_index + 1}/{total_pages})")
+            title.attemptMove(
+                QgsLayoutPoint(
+                    title_template.pos().x(),
+                    title_template.pos().y() + offset,
+                    QgsUnitTypes.LayoutMillimeters,
+                )
+            )
+            title.setId(f"title_{page_index}")
+            layout.addLayoutItem(title)
+
+        # Author
+        if author_template:
+            author = QgsLayoutItemLabel(layout)
+            author.setText("Auteur: QGIS User")
+            author.attemptMove(
+                QgsLayoutPoint(
+                    author_template.pos().x(),
+                    author_template.pos().y() + offset,
+                    QgsUnitTypes.LayoutMillimeters,
+                )
+            )
+            author.setId(f"author_{page_index}")
+            layout.addLayoutItem(author)
+
+        # Date
+        if date_template:
+            date_label = QgsLayoutItemLabel(layout)
+            date_label.setText(datetime.now().strftime("%d/%m/%Y"))
+            date_label.attemptMove(
+                QgsLayoutPoint(
+                    date_template.pos().x(),
+                    date_template.pos().y() + offset,
+                    QgsUnitTypes.LayoutMillimeters,
+                )
+            )
+            date_label.setId(f"date_{page_index}")
+            layout.addLayoutItem(date_label)
+
+        # Logo (optional)
+        if logo_template and logo_path:
+            logo_item = QgsLayoutItemPicture(layout)
+            logo_item.setPicturePath(logo_path)
+            logo_item.attemptMove(
+                QgsLayoutPoint(
+                    logo_template.pos().x(),
+                    logo_template.pos().y() + offset,
+                    QgsUnitTypes.LayoutMillimeters,
+                )
+            )
+            logo_item.attemptResize(
+                QgsLayoutSize(
+                    logo_template.rectWithFrame().width(),
+                    logo_template.rectWithFrame().height(),
+                    QgsUnitTypes.LayoutMillimeters,
+                )
+            )
+            logo_item.setId(f"logo_{page_index}")
+            layout.addLayoutItem(logo_item)
+
+    # Export to PDF (layout cleanup handled by caller)
+    try:
+        _export_layout_to_pdf(layout, output_path)
+    finally:
+        manager.removeLayout(layout)
+
+    return output_path
+
+
+# ──────────────────────────────────────────────
+#  Legende
+# ──────────────────────────────────────────────
+
+
 def _make_legend(
     layout,
     map_item,
-    layer_names,
     x=15.0,
     y=30.0,
     columns=2,
@@ -311,8 +488,7 @@ def _make_legend(
 
     layout.addLayoutItem(legend)
 
-    legend.attemptMove(QgsLayoutPoint(x, y, QgsUnitTypes.LayoutMillimeters))
-
+    legend.attemptMove(QgsLayoutPoint(x, y, QgsUnitTypes.LayoutMillimeters))   
     legend.refresh()
 
     return legend
@@ -398,7 +574,6 @@ def _create_legend_page(
     _make_legend(
         layout,
         map_item,
-        chunk,
         x=15,
         y=30,
         columns=2,
@@ -424,41 +599,19 @@ def _export_separate_legend(
     directory,
     layer_names,
     date_hm,
-    extent,
     logo_path,
     per_page=25,
 ):
-    project = QgsProject.instance()
-    manager = project.layoutManager()
+    """Export a separate legend PDF using the provided layer names.
 
-    layout_name = f"Legende_GeoPDF_{date_hm}"
-
-    layout = create_layout(
-        project,
-        manager,
-        layout_name,
+    This function creates a multi‑page legend layout without any map items.
+    It is used by the main PDF export workflow.
+    """
+    # Legacy function retained for compatibility; calls the newer implementation.
+    return generate_legend_pdf_from_template(
+        template_path=os.path.join(os.path.dirname(__file__), "../resources/simple_legend_layout.qpt"),
+        output_path=os.path.join(directory, f"Legende_GeoPDF_{date_hm}.pdf"),
+        layer_names=layer_names,
+        logo_path=logo_path,
+        per_page=per_page,
     )
-
-    chunks = list(_chunk_layers(layer_names, per_page))
-
-    total_pages = len(chunks)
-
-    for page_index, chunk in enumerate(chunks):
-        _create_legend_page(
-            layout=layout,
-            chunk=chunk,
-            extent=extent,
-            logo_path=logo_path,
-            page_index=page_index,
-            total_pages=total_pages,
-        )
-
-    file_name = f"Legende_GeoPDF_{date_hm}.pdf"
-
-    path = os.path.join(directory, file_name)
-
-    _export_layout_to_pdf(layout, path)
-
-    manager.removeLayout(layout)
-
-    return path
